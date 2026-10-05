@@ -18,10 +18,9 @@ small{color:#666}
 </head>
 <body>
 <h1>Substack Draft Reviewer <small>local-first · direct SID</small></h1>
-<div class="warn">This runs on <code>localhost</code> only. By default it uses the server's <code>.env</code> SID — leave the field empty. Only paste a SID below to temporarily test a <em>different</em> account (stored in <code>localStorage</code>, never committed). SID = full account access; revoke by logging out of Substack.</div>
+<div class="warn">Local-only MVP. Auth uses the server's <code>.env</code> SID.</div>
 <header>
-<label>SID override (optional)<br/><input id="sid" type="password" size="28" placeholder="(empty = use server .env)"/></label>
-<label>Publication<br/><select id="pub"><option value="">(load from SID…)</option></select></label>
+<label>Publication<br/><select id="pub"><option value="">(loading…)</option></select></label>
 <button id="load">Load posts</button>
 <span id="status"></span>
 </header>
@@ -46,10 +45,9 @@ small{color:#666}
 </div>
 <script>
 const $=id=>document.getElementById(id);
-const sidEl=$('sid'),pubEl=$('pub');
-sidEl.value=localStorage.getItem('sid')||'';
+const pubEl=$('pub');
 let currentId=null,store=null;
-function H(){const h={};if(sidEl.value){h['x-substack-sid']=sidEl.value;localStorage.setItem('sid',sidEl.value);}if(pubEl.value){h['x-pub']=pubEl.value;localStorage.setItem('pub',pubEl.value);}return h;}
+function H(){const h={};if(pubEl.value){h['x-pub']=pubEl.value;localStorage.setItem('pub',pubEl.value);}return h;}
 async function loadPubs(){
   const r=await fetch('/api/me',{headers:H()});
   const j=await r.json();
@@ -59,10 +57,9 @@ async function loadPubs(){
     pubEl.innerHTML=j.pubs.map(p=>`<option value="${p.host}">${p.name} (${p.host})</option>`).join('');
     if(saved&&[...pubEl.options].some(o=>o.value===saved))pubEl.value=saved;
     else if(j.pubs.length)localStorage.setItem('pub',pubEl.value);
-    $('status').textContent=sidEl.value?'using SID override':'using server .env SID';
+    $('status').textContent='';
   }
 }
-sidEl.onchange=loadPubs;
 loadPubs();
 $('load').onclick=async()=>{
   $('status').textContent='loading…';
