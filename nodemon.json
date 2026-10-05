@@ -1,0 +1,4 @@
+{
+  "watch": ["server.js", "lib/", "public/"],
+  "ignore": ["data/*"]
+}

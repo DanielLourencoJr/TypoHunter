@@ -9,10 +9,11 @@ rewritten voice, images and embeds preserved.
 
 ```bash
 cp .env.example .env   # fill SUBSTACK_SID + GROQ_API_KEY (see below)
-node server.js          # http://localhost:5179
+npm install            # nodemon for auto-restart during development
+npm run dev            # http://localhost:5179 (restarts on code changes)
 ```
 
-No dependencies, no build step. Node.js 18+.
+No runtime dependencies (nodemon is dev-only), no build step. Node.js 18+.
 
 ## Configuration (`.env`)
 

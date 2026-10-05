@@ -5,8 +5,9 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
 
 ## Run / verify
 
-- `node server.js` → `http://localhost:5179`. UI-only edits (`public/index.html`,
-  served from disk per request) need no restart; `server.js` / `lib/*.js` do.
+- `npm run dev` (nodemon, watches `server.js`/`lib`/`public`, ignores `data/`) →
+  `http://localhost:5179`. UI-only edits (`public/index.html`,
+  served from disk per request, `no-store`) need no restart either way.
 - No test suite. Verify with `node --check <file>`. For `public/index.html`,
   extract the `<script>` block and `node --check` it; logic-test pure functions
   by evaluating the extracted script in node with DOM stubs
