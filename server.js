@@ -152,12 +152,28 @@ const server = http.createServer(async (req, res) => {
       if (!store) {
         store = {
           id: Number(id),
-          title: draft.draft_title,
+          title: draft.draft_title || draft.title,
           versions: [{ n: 0, md, note: "original from Substack", createdAt: new Date().toISOString() }],
           suggestions: [],
+          pushes: [],
           mode: "none",
         };
         saveStore(id, store);
+      } else if (!store.pushes) {
+        // one-time migration: old code logged each push as a duplicate-content
+        // version ("pushed vN …"). Collapse those into push markers instead.
+        store.pushes = [];
+        let changed = false;
+        while (store.versions.length > 1) {
+          const last = store.versions[store.versions.length - 1];
+          const m = /^pushed v(\d+) to Substack \((republished live|draft only)\)$/.exec(last.note || "");
+          const target = m && store.versions.find((x) => x.n === Number(m[1]));
+          if (!m || !target || target.md !== last.md) break;
+          store.pushes.push({ version: target.n, republished: m[2] === "republished live", at: last.createdAt });
+          store.versions.pop();
+          changed = true;
+        }
+        if (changed) saveStore(id, store);
       }
       return send(res, 200, { id, title: draft.draft_title || draft.title, subtitle: draft.draft_subtitle, store });
     }
@@ -233,12 +249,10 @@ const server = http.createServer(async (req, res) => {
         await publishDraft({ sid, publicationUrl: pub, id, send: false, shareAutomatically: false });
         republished = true;
       }
-      store.versions.push({
-        n: store.versions.length,
-        md: target.md,
-        note: `pushed v${target.n} to Substack (${republished ? "republished live" : "draft only"})`,
-        createdAt: new Date().toISOString(),
-      });
+      // Record the push ON the version, not as a new version: versions are
+      // content states (v0, v1, …), pushes are events pointing at them.
+      store.pushes = store.pushes || [];
+      store.pushes.push({ version: target.n, republished, at: new Date().toISOString() });
       saveStore(id, store);
       return send(res, 200, { ok: true, pushedVersion: target.n, republished, draft_updated_at: result.draft_updated_at });
     }

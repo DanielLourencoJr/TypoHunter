@@ -301,9 +301,12 @@ function renderSugs() {
 }
 
 function renderVersions() {
-  $('versions').innerHTML = store.versions.map(v =>
-    `<div class="ver"><span class="vn">v${v.n}</span><span>${esc(v.note)} <span class="hint">${(v.createdAt || '').slice(0, 16).replace('T', ' ')}</span></span><button class="ghost" data-v="${v.n}">rewind here</button></div>`
-  ).join('');
+  const pushes = store.pushes || [];
+  $('versions').innerHTML = store.versions.map(v => {
+    const marks = pushes.filter(p => p.version === v.n)
+      .map(p => `<span class="tag">pushed${p.republished ? ' + republished' : ''} ${(p.at || '').slice(0, 16).replace('T', ' ')}</span>`).join('');
+    return `<div class="ver"><span class="vn">v${v.n}</span><span>${esc(v.note)} <span class="hint">${(v.createdAt || '').slice(0, 16).replace('T', ' ')}</span>${marks}</span><button class="ghost" data-v="${v.n}">rewind here</button></div>`;
+  }).join('');
   document.querySelectorAll('#versions button').forEach(b => b.onclick = async () => {
     if (!confirm(`Rewind to v${b.dataset.v}? Creates a new local version (Substack untouched).`)) return;
     busy(true);
