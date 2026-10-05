@@ -292,54 +292,24 @@ function emphLine(line, needle, cls) {
   if (i === -1 || !needle) return esc(line);
   return esc(line.slice(0, i)) + `<span class="${cls}">${esc(needle)}</span>` + esc(line.slice(i + needle.length));
 }
-function locateLine(lines, original) {
-  // exact single-line hit first; then longest substantive line (multi-line originals)
-  let idx = original === '  (double space)'
-    ? lines.findIndex(l => /[^ ]  +[^ ]/.test(l))
-    : lines.findIndex(l => l.includes(original));
-  if (idx !== -1) return { idx, exact: true };
-  if (original === '  (double space)') return { idx: -1, exact: false };
-  const key = original.split('\n').map(x => x.trim()).filter(x => x).sort((a, b) => b.length - a.length)[0];
-  idx = key ? lines.findIndex(l => l.includes(key)) : -1;
-  return { idx, exact: false };
-}
-function diffHunk(md, s, ctx = 2) {
+function diffHunk(md, s) {
   const lines = String(md).split('\n');
-  const loc = locateLine(lines, s.original);
-  const idx = loc.idx;
-  let oldShown, newShown, run = s.original, newNeedle = s.replacement;
   if (s.original === '  (double space)') {
-    oldShown = idx === -1 ? '' : lines[idx];
-    run = (oldShown.match(/  +/) || [''])[0];
-    newShown = oldShown.replace(/  +/g, ' ');
-    newNeedle = ' ';
-  } else if (loc.exact && idx !== -1) {
-    oldShown = lines[idx];
-    newShown = oldShown.replace(s.original, s.replacement);
-  } else {
-    // multi-line or already-applied: show the whole block, context at its location
-    oldShown = s.original;
-    newShown = s.replacement;
+    const line = lines.find(l => /[^ ]  +[^ ]/.test(l)) || '';
+    const run = (line.match(/  +/) || [''])[0];
+    return { oldHtml: emphLine(line, run, 'hl-old'), newHtml: emphLine(line.replace(/  +/g, ' '), ' ', 'hl-new') };
   }
-  const span = idx === -1 ? 0 : Math.max(1, s.original.split('\n').length);
-  const pre = [], post = [];
-  if (idx !== -1) {
-    for (let k = Math.max(0, idx - ctx); k < idx; k++) pre.push(lines[k]);
-    for (let k = idx + span; k <= Math.min(lines.length - 1, idx + span - 1 + ctx); k++) post.push(lines[k]);
-  }
+  const line = lines.find(l => l.includes(s.original));
+  if (line === undefined) return { oldHtml: esc(s.original), newHtml: esc(s.replacement) };
   return {
-    old: oldShown, nl: newShown,
-    oldHtml: loc.exact && idx !== -1 ? emphLine(oldShown, run, 'hl-old') : esc(oldShown),
-    newHtml: loc.exact && idx !== -1 ? emphLine(newShown, newNeedle, 'hl-new') : esc(newShown),
-    pre: pre.map(esc), post: post.map(esc),
+    oldHtml: emphLine(line, s.original, 'hl-old'),
+    newHtml: emphLine(line.replace(s.original, s.replacement), s.replacement, 'hl-new'),
   };
 }
-function diffBlock(h, reason, idx, withCtx = true) {
-  const pre = withCtx ? h.pre.map(l => `<div class="dctx">${l || '&nbsp;'}</div>`).join('') : '';
-  const post = withCtx ? h.post.map(l => `<div class="dctx">${l || '&nbsp;'}</div>`).join('') : '';
+function diffBlock(h, reason, idx) {
   return `${idx != null ? `<div class="hunkhead">fix ${idx}${reason ? ` · ${esc(reason)}` : ''}</div>` : ''}` +
-    `<div class="diff">${pre}<div class="dold"><span class="sign">−</span><span>${h.oldHtml}</span></div>` +
-    `<div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div>${post}</div>`;
+    `<div class="diff"><div class="dold"><span class="sign">−</span><span>${h.oldHtml}</span></div>` +
+    `<div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div></div>`;
 }
 /* Line ops between two texts (LCS; prefix/suffix fallback on huge inputs). */
 function lineOps(aText, bText) {
@@ -415,7 +385,7 @@ function inlineVersionDiff(oldBody, newBody) {
   const { A, B, ops } = lineOps(oldBody, newBody);
   if (!ops.some(o => o.t !== ' ')) return '';
   const placements = [];
-  groupHunks(ops, 2).forEach((h) => {
+  groupHunks(ops, 0).forEach((h) => {
     let ai = 0, bi = 0;
     for (let p = 0; p < h.start; p++) { const o = ops[p]; if (o.t !== '+') ai++; if (o.t !== '-') bi++; }
     const startA = ai;
@@ -450,7 +420,7 @@ function previewInline(bodyMd, suggestions) {
     placements.push({
       line: eIdx - delta,
       span: spanOrig,
-      html: diffBlock(diffHunk(cur, s), s.reason, k + 1, false),
+      html: diffBlock(diffHunk(cur, s), s.reason, k + 1),
     });
     // evolve exactly like server apply (full-text, first occurrence)
     if (s.original === '  (double space)') cur = cur.replace(/[^ ]  +[^ ]/g, m => m.replace(/  +/g, ' '));
