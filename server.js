@@ -95,6 +95,30 @@ function latestMarkdown(store) {
   return store.versions[store.versions.length - 1].md;
 }
 
+// Substack-content snapshot for sync comparison. Frontmatter carries transport
+// fields (slug, id, publication_id) that change without any real edit —
+// publishing assigns a slug — so compare body + human fields only.
+function snapOf(md) {
+  const { data: fm, body } = parseFrontmatter(md);
+  return {
+    body,
+    title: fm.title || "",
+    subtitle: fm.subtitle != null ? String(fm.subtitle) : "",
+    audience: fm.audience || "",
+  };
+}
+function sameSnap(a, b) {
+  return !!a && !!b && a.body === b.body && a.title === b.title &&
+    a.subtitle === b.subtitle && a.audience === b.audience;
+}
+function snapOfVersion(v) {
+  try {
+    return snapOf(v.md);
+  } catch {
+    return null;
+  }
+}
+
 function editionParam(url, body) {
   const e = body?.edition || url.searchParams.get("edition") || "original";
   return String(e).toLowerCase();
@@ -130,17 +154,18 @@ function blankEdStore(md) {
     versions: [{ n: 0, md, note: "original from Substack", createdAt: now }],
     suggestions: [],
     pushes: [],
-    lastSeen: md,
+    lastSeen: snapOf(md),
     mode: "none",
   };
 }
 
 // Migrate flat pre-edition stores ({versions,…}) into {editions:{original:…}}.
 function migrateStore(store) {
+  let changed = false;
   if (store.editions) {
-    // collapse legacy duplicate-content push versions inside each edition
     for (const ed of Object.values(store.editions)) {
       ed.pushes = ed.pushes || [];
+      // collapse legacy duplicate-content push versions inside each edition
       while (ed.versions.length > 1) {
         const last = ed.versions[ed.versions.length - 1];
         const m = /^pushed v(\d+) to Substack \((republished live|draft only)\)$/.exec(last.note || "");
@@ -148,10 +173,25 @@ function migrateStore(store) {
         if (!m || !target || target.md !== last.md) break;
         ed.pushes.push({ version: target.n, republished: m[2] === "republished live", at: last.createdAt });
         ed.versions.pop();
+        changed = true;
       }
-      if (ed.lastSeen === undefined) ed.lastSeen = latestMarkdown(ed);
+      // collapse spurious "synced from Substack" versions that duplicate an
+      // earlier version's content (e.g. frontmatter-only drift like a new slug)
+      while (ed.versions.length > 1) {
+        const last = ed.versions[ed.versions.length - 1];
+        if (!/^synced from Substack/.test(last.note || "")) break;
+        const dup = ed.versions.some((v) => v !== last && sameSnap(snapOfVersion(v), snapOfVersion(last)));
+        if (!dup) break;
+        ed.versions.pop();
+        changed = true;
+      }
+      // string-era lastSeen (full markdown) → snapshot object
+      if (typeof ed.lastSeen === "string" || !ed.lastSeen || typeof ed.lastSeen.body !== "string") {
+        ed.lastSeen = snapOf(latestMarkdown(ed));
+        changed = true;
+      }
     }
-    return false;
+    return changed;
   }
   const { versions, suggestions, pushes, lastSeen, mode } = store;
   store.editions = {
@@ -240,9 +280,12 @@ const server = http.createServer(async (req, res) => {
         const es = edStore(store, edition, md);
         if (isNewEdition) dirty = true;
         // Refresh: Substack may have been edited externally (editor, app).
-        if (md !== es.lastSeen) {
-          if (md === latestMarkdown(es) || es.versions.some((v) => v.md === md)) {
-            es.lastSeen = md; // caught up with a known version (e.g. our own push)
+        // Compare content snapshots, not raw markdown: transport fields like
+        // slug change without any real edit (e.g. on publish).
+        const fresh = snapOf(md);
+        if (!sameSnap(fresh, es.lastSeen)) {
+          if (es.versions.some((v) => sameSnap(snapOfVersion(v), fresh))) {
+            es.lastSeen = fresh; // caught up with a known version (e.g. our own push)
             dirty = true;
           } else {
             es.versions.push({
@@ -252,7 +295,7 @@ const server = http.createServer(async (req, res) => {
               createdAt: new Date().toISOString(),
             });
             es.suggestions = []; // computed against older text — re-proofread
-            es.lastSeen = md;
+            es.lastSeen = fresh;
             dirty = true;
           }
         }
@@ -376,7 +419,7 @@ const server = http.createServer(async (req, res) => {
       // content states (v0, v1, …), pushes are events pointing at them.
       es.pushes = es.pushes || [];
       es.pushes.push({ version: target.n, republished, at: new Date().toISOString() });
-      es.lastSeen = target.md; // Substack now holds this content
+      es.lastSeen = snapOf(target.md); // Substack now holds this content
       saveStore(id, store);
       return send(res, 200, { ok: true, pushedVersion: target.n, republished, draft_updated_at });
     }

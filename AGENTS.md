@@ -29,7 +29,9 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
 
 - Shape: `{editions: {original|en|…: {versions, suggestions, pushes, lastSeen, mode}}}`.
 - Versions are content states only; pushes are markers on versions (`pushes[]`),
-  never new versions. `lastSeen` tracks last Substack state for external-edit sync.
+  never new versions. `lastSeen` tracks last Substack state as a content snapshot
+  `{body, title, subtitle, audience}` — full-markdown compare would false-positive
+  on transport fields like the slug assigned at publish.
 - Apply consumes suggestions (`suggestions = []`); stale ones (text no longer
   contains `original`) are display-partitioned, never re-offered.
 - Push strips frontmatter before `mdToTiptap` or it renders as visible `---` text.
