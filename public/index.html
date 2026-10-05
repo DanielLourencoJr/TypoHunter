@@ -18,9 +18,9 @@ small{color:#666}
 </head>
 <body>
 <h1>Substack Draft Reviewer <small>local-first · direct SID</small></h1>
-<div class="warn">SID = full account access. Paste it per-session (stored only in <code>localStorage</code>), never commit it. Revoke by logging out of Substack. This MVP runs on <code>localhost</code> only.</div>
+<div class="warn">This runs on <code>localhost</code> only. By default it uses the server's <code>.env</code> SID — leave the field empty. Only paste a SID below to temporarily test a <em>different</em> account (stored in <code>localStorage</code>, never committed). SID = full account access; revoke by logging out of Substack.</div>
 <header>
-<label>SID<br/><input id="sid" type="password" size="28" placeholder="substack.sid value"/></label>
+<label>SID override (optional)<br/><input id="sid" type="password" size="28" placeholder="(empty = use server .env)"/></label>
 <label>Publication<br/><select id="pub"><option value="">(load from SID…)</option></select></label>
 <button id="load">Load posts</button>
 <span id="status"></span>
@@ -51,13 +51,15 @@ sidEl.value=localStorage.getItem('sid')||'';
 let currentId=null,store=null;
 function H(){const h={};if(sidEl.value){h['x-substack-sid']=sidEl.value;localStorage.setItem('sid',sidEl.value);}if(pubEl.value){h['x-pub']=pubEl.value;localStorage.setItem('pub',pubEl.value);}return h;}
 async function loadPubs(){
-  if(!sidEl.value)return;
-  const r=await fetch('/api/me',{headers:H()});const j=await r.json();
+  const r=await fetch('/api/me',{headers:H()});
+  const j=await r.json();
+  if(j.error){$('status').textContent=j.error;return;}
   if(j.pubs){
     const saved=localStorage.getItem('pub');
     pubEl.innerHTML=j.pubs.map(p=>`<option value="${p.host}">${p.name} (${p.host})</option>`).join('');
     if(saved&&[...pubEl.options].some(o=>o.value===saved))pubEl.value=saved;
     else if(j.pubs.length)localStorage.setItem('pub',pubEl.value);
+    $('status').textContent=sidEl.value?'using SID override':'using server .env SID';
   }
 }
 sidEl.onchange=loadPubs;
