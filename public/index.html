@@ -261,10 +261,12 @@ function renderMarkdown(src) {
     if ((m = line.match(/^>\s?(.*)/))) { closeList(); const q = []; while (i < lines.length && /^>\s?/.test(lines[i])) q.push(lines[i].replace(/^>\s?/, '')), i++; html += `<blockquote>${q.map(renderInline).join('<br/>')}</blockquote>`; continue; }
     if ((m = line.match(/^(\s*)[-*]\s+(.*)/))) { if (listTag !== 'ul') { closeList(); html += '<ul>'; listTag = 'ul'; } html += `<li>${renderInline(m[2])}</li>`; i++; continue; }
     if ((m = line.match(/^(\s*)\d+[.)]\s+(.*)/))) { if (listTag !== 'ol') { closeList(); html += '<ol>'; listTag = 'ol'; } html += `<li>${renderInline(m[2])}</li>`; i++; continue; }
+    // placeholder lines (media chips / preview diffs) are block boundaries, never paragraph text
+    if (/^\u0000(MEDIA|DIF)\d+\u0000$/.test(line)) { closeList(); html += line; i++; continue; }
     closeList();
     const para = [line];
     i++;
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,6}\s|```|>\s?|\s*([-*]|\d+[.)])\s|---+\s*$)/.test(lines[i])) para.push(lines[i]), i++;
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,6}\s|```|>\s?|\s*([-*]|\d+[.)])\s|---+\s*$)|^\u0000(MEDIA|DIF)\d+\u0000$/.test(lines[i])) para.push(lines[i]), i++;
     html += `<p>${para.map(renderInline).join('<br/>')}</p>`;
   }
   closeList();
@@ -289,29 +291,45 @@ function emphLine(line, needle, cls) {
   if (i === -1 || !needle) return esc(line);
   return esc(line.slice(0, i)) + `<span class="${cls}">${esc(needle)}</span>` + esc(line.slice(i + needle.length));
 }
+function locateLine(lines, original) {
+  // exact single-line hit first; then longest substantive line (multi-line originals)
+  let idx = original === '  (double space)'
+    ? lines.findIndex(l => /[^ ]  +[^ ]/.test(l))
+    : lines.findIndex(l => l.includes(original));
+  if (idx !== -1) return { idx, exact: true };
+  if (original === '  (double space)') return { idx: -1, exact: false };
+  const key = original.split('\n').map(x => x.trim()).filter(x => x).sort((a, b) => b.length - a.length)[0];
+  idx = key ? lines.findIndex(l => l.includes(key)) : -1;
+  return { idx, exact: false };
+}
 function diffHunk(md, s, ctx = 2) {
   const lines = String(md).split('\n');
-  let idx = -1, oldLine = '', nl = '', run = s.original, newNeedle = s.replacement;
+  const loc = locateLine(lines, s.original);
+  const idx = loc.idx;
+  let oldShown, newShown, run = s.original, newNeedle = s.replacement;
   if (s.original === '  (double space)') {
-    idx = lines.findIndex(l => /[^ ]  +[^ ]/.test(l));
-    oldLine = idx === -1 ? '' : lines[idx];
-    run = (oldLine.match(/  +/) || [''])[0];
-    nl = oldLine.replace(/  +/g, ' ');
+    oldShown = idx === -1 ? '' : lines[idx];
+    run = (oldShown.match(/  +/) || [''])[0];
+    newShown = oldShown.replace(/  +/g, ' ');
     newNeedle = ' ';
+  } else if (loc.exact && idx !== -1) {
+    oldShown = lines[idx];
+    newShown = oldShown.replace(s.original, s.replacement);
   } else {
-    idx = lines.findIndex(l => l.includes(s.original));
-    oldLine = idx === -1 ? s.original : lines[idx];
-    nl = idx === -1 ? s.replacement : oldLine.replace(s.original, s.replacement);
+    // multi-line or already-applied: show the whole block, context at its location
+    oldShown = s.original;
+    newShown = s.replacement;
   }
+  const span = idx === -1 ? 0 : Math.max(1, s.original.split('\n').length);
   const pre = [], post = [];
   if (idx !== -1) {
     for (let k = Math.max(0, idx - ctx); k < idx; k++) pre.push(lines[k]);
-    for (let k = idx + 1; k <= Math.min(lines.length - 1, idx + ctx); k++) post.push(lines[k]);
+    for (let k = idx + span; k <= Math.min(lines.length - 1, idx + span - 1 + ctx); k++) post.push(lines[k]);
   }
   return {
-    old: oldLine, nl,
-    oldHtml: emphLine(oldLine, run, 'hl-old'),
-    newHtml: emphLine(nl, newNeedle, 'hl-new'),
+    old: oldShown, nl: newShown,
+    oldHtml: loc.exact && idx !== -1 ? emphLine(oldShown, run, 'hl-old') : esc(oldShown),
+    newHtml: loc.exact && idx !== -1 ? emphLine(newShown, newNeedle, 'hl-new') : esc(newShown),
     pre: pre.map(esc), post: post.map(esc),
   };
 }
@@ -328,27 +346,34 @@ function diffBlock(h, reason, idx, withCtx = true) {
 function previewInline(bodyMd, suggestions) {
   let cur = bodyMd;
   const blocks = [];
-  const atLine = new Map();
+  const marks = []; // {orig, span, bi} in ORIGINAL bodyMd coordinates
   const skipped = [];
+  let delta = 0; // cumulative line-count drift from already-walked fixes
   suggestions.forEach((s, k) => {
-    const lines = cur.split('\n');
-    const idx = s.original === '  (double space)'
-      ? lines.findIndex(l => /[^ ]  +[^ ]/.test(l))
-      : lines.findIndex(l => l.includes(s.original));
-    if (idx === -1) { skipped.push(k + 1); return; }
+    // placement by character position: also works for multi-line originals
+    const pos = s.original === '  (double space)' ? cur.search(/[^ ]  +[^ ]/) : cur.indexOf(s.original);
+    if (pos === -1) { skipped.push(k + 1); return; }
+    const eIdx = cur.slice(0, pos).split('\n').length - 1;
+    const spanOrig = s.original === '  (double space)' ? 1 : s.original.split('\n').length;
+    const spanNew = s.original === '  (double space)' ? 1 : s.replacement.split('\n').length;
     blocks.push(diffBlock(diffHunk(cur, s), s.reason, k + 1, false));
-    const list = atLine.get(idx) || [];
-    list.push(blocks.length - 1);
-    atLine.set(idx, list);
-    const arr = cur.split('\n');
-    if (s.original === '  (double space)') arr[idx] = arr[idx].replace(/  +/g, ' ');
-    else arr[idx] = arr[idx].replace(s.original, s.replacement);
-    cur = arr.join('\n');
+    marks.push({ orig: eIdx - delta, span: spanOrig, bi: blocks.length - 1 });
+    // evolve exactly like server apply (full-text, first occurrence)
+    if (s.original === '  (double space)') cur = cur.replace(/[^ ]  +[^ ]/g, m => m.replace(/  +/g, ' '));
+    else { const i = cur.indexOf(s.original); if (i !== -1) cur = cur.slice(0, i) + s.replacement + cur.slice(i + s.original.length); }
+    delta += spanNew - spanOrig;
+  });
+  const covered = new Set();
+  marks.forEach(mk => { for (let l = mk.orig; l < mk.orig + mk.span; l++) covered.add(l); });
+  const byLine = new Map();
+  marks.forEach(mk => {
+    if (!byLine.has(mk.orig)) byLine.set(mk.orig, []);
+    byLine.get(mk.orig).push(mk.bi);
   });
   const out = [];
   bodyMd.split('\n').forEach((ln, i) => {
-    if (atLine.has(i)) atLine.get(i).forEach(bi => out.push(`\u0000DIF${bi}\u0000`));
-    else out.push(ln);
+    if (byLine.has(i)) byLine.get(i).forEach(bi => out.push(`\u0000DIF${bi}\u0000`));
+    else if (!covered.has(i)) out.push(ln);
   });
   let html = renderMarkdown(out.join('\n'));
   html = html.replace(/<p>\u0000DIF(\d+)\u0000<\/p>/g, (m, n) => `\u0000DIF${n}\u0000`);
@@ -465,6 +490,10 @@ function renderDoc() {
   }
 }
 
+function isApplicable(md, s) {
+  if (s.original === '  (double space)') return /[^ ]  +[^ ]/.test(md);
+  return md.includes(s.original);
+}
 function renderSugs() {
   const sugs = store.suggestions || [];
   const md = store.versions[store.versions.length - 1].md;
@@ -473,13 +502,21 @@ function renderSugs() {
     $('sugs').innerHTML = '<p class="hint">No fixes needed — the text looks clean.</p>';
     return;
   }
-  $('sugs').innerHTML = sugs.map((s, k) => `
+  // already-applied (or overlapped) fixes no longer match the current text:
+  // show them separately instead of as actionable diffs
+  const applicable = sugs.filter(s => isApplicable(md, s));
+  const stale = sugs.filter(s => !isApplicable(md, s));
+  $('count').textContent = `${applicable.length} to review · ${stale.length} already applied/not found · engine ${store.mode}`;
+  $('sugs').innerHTML = applicable.map((s) => `
     <div class="sug" data-wrap="${s.id}">
       <label class="sughead"><input type="checkbox" data-s="${s.id}" checked />
-      <span>fix ${k + 1}<span class="tag">${esc(s.reason)}</span></span>
+      <span>${esc(s.id)}<span class="tag">${esc(s.reason)}</span></span>
       </label>
       ${diffBlock(diffHunk(md, s))}
-    </div>`).join('');
+    </div>`).join('') + (stale.length ? `
+    <details><summary class="hint">Already applied or not found (${stale.length}) — details</summary>
+    ${stale.map((s) => `<div class="sug off"><span class="hint">${esc(s.id)} · ${esc(s.reason)} · “${esc(s.original.slice(0, 80))}” no longer in this version</span></div>`).join('')}
+    </details>` : '');
   document.querySelectorAll('#sugs input').forEach(c => c.onchange = () => {
     c.closest('.sug').classList.toggle('off', !c.checked);
     if (tab === 'prev') renderDoc();

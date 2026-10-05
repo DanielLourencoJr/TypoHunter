@@ -306,11 +306,11 @@ const server = http.createServer(async (req, res) => {
       const accepted = es.suggestions.filter((s) => acceptedIds.has(s.id));
       if (!accepted.length) return send(res, 400, { error: "no suggestions accepted" });
       const md = latestMarkdown(es);
-      const next = applySuggestions(md, accepted);
+      const { md: next, applied, skipped } = applySuggestions(md, accepted);
       es.versions.push({
         n: es.versions.length,
         md: next,
-        note: `applied ${accepted.length}/${es.suggestions.length} (${es.mode})`,
+        note: `applied ${applied}/${es.suggestions.length} (${es.mode})${skipped ? `, ${skipped} skipped (not in text)` : ""}`,
         createdAt: new Date().toISOString(),
       });
       es.suggestions = []; // consumed into the new version — re-proofread for more
