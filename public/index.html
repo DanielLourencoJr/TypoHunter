@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Substack Draft Reviewer (local)</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:960px;margin:24px auto;padding:0 16px;color:#1a1a1a}
+header{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:16px}
+input{padding:6px 8px}button{padding:7px 12px;cursor:pointer}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+pre{white-space:pre-wrap;background:#f6f6f6;padding:12px;border-radius:8px;max-height:480px;overflow:auto}
+.sug{border:1px solid #ddd;border-radius:8px;padding:8px;margin:8px 0}
+.sug .o{color:#a00;text-decoration:line-through}.sug .n{color:#0a0;font-weight:600}
+.warn{background:#fff7e6;border:1px solid #f0c36d;padding:8px;border-radius:8px;margin:12px 0}
+small{color:#666}
+</style>
+</head>
+<body>
+<h1>Substack Draft Reviewer <small>local-first · direct SID</small></h1>
+<div class="warn">SID = full account access. Paste it per-session (stored only in <code>localStorage</code>), never commit it. Revoke by logging out of Substack. This MVP runs on <code>localhost</code> only.</div>
+<header>
+<label>SID<br/><input id="sid" type="password" size="28" placeholder="substack.sid value"/></label>
+<label>Publication<br/><select id="pub"><option value="">(load from SID…)</option></select></label>
+<button id="load">Load posts</button>
+<span id="status"></span>
+</header>
+<div class="cols">
+<div>
+<h3>Drafts</h3><div id="drafts"></div>
+<h3>Published (editable via republish)</h3><div id="pubd"></div>
+</div>
+<div>
+<h3>Versions</h3><div id="versions"></div>
+</div>
+</div>
+<h3 id="ptitle"></h3>
+<div class="cols">
+<div><h4>Current markdown (latest version)</h4><pre id="md"></pre><button id="proof">Proofread latest</button> <small id="mode"></small></div>
+<div><h4>Suggestions (check to accept)</h4><div id="sugs"></div><button id="apply">Apply selected as new version</button> <button id="all">Approve all</button></div>
+</div>
+<div>
+<h4>Push</h4>
+<label><input type="checkbox" id="republish"/> Republish live (only if post is already published — updates public page, no email)</label><br/>
+<button id="push">Push latest version to Substack draft</button> <small>explicit only — never auto-pushes. Rewind first if needed.</small>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const sidEl=$('sid'),pubEl=$('pub');
+sidEl.value=localStorage.getItem('sid')||'';
+let currentId=null,store=null;
+function H(){const h={};if(sidEl.value){h['x-substack-sid']=sidEl.value;localStorage.setItem('sid',sidEl.value);}if(pubEl.value){h['x-pub']=pubEl.value;localStorage.setItem('pub',pubEl.value);}return h;}
+async function loadPubs(){
+  if(!sidEl.value)return;
+  const r=await fetch('/api/me',{headers:H()});const j=await r.json();
+  if(j.pubs){
+    const saved=localStorage.getItem('pub');
+    pubEl.innerHTML=j.pubs.map(p=>`<option value="${p.host}">${p.name} (${p.host})</option>`).join('');
+    if(saved&&[...pubEl.options].some(o=>o.value===saved))pubEl.value=saved;
+    else if(j.pubs.length)localStorage.setItem('pub',pubEl.value);
+  }
+}
+sidEl.onchange=loadPubs;
+loadPubs();
+$('load').onclick=async()=>{
+  $('status').textContent='loading…';
+  const r=await fetch('/api/posts?limit=20',{headers:H()});const j=await r.json();
+  if(j.error){$('status').textContent=j.error;return;}
+  $('status').textContent='';
+  $('drafts').innerHTML=j.drafts.map(d=>`<div><button data-id="${d.id}">${d.title||'(untitled)'} #${d.id}</button></div>`).join('')||'(none)';
+  $('pubd').innerHTML=j.published.map(d=>`<div><button data-id="${d.id}">${d.title||'(untitled)'} #${d.id}</button></div>`).join('')||'(none)';
+  document.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>openPost(b.dataset.id));
+};
+async function openPost(id){
+  currentId=id;const r=await fetch(`/api/posts/${id}`,{headers:H()});const j=await r.json();
+  if(j.error){alert(j.error);return;}
+  store=j.store;$('ptitle').textContent=`#${id} ${j.title||''}`;render();
+}
+function render(){
+  const latest=store.versions[store.versions.length-1];
+  $('md').textContent=latest.md.slice(0,8000);
+  $('mode').textContent=`v${latest.n} · ${latest.note} · mode:${store.mode}`;
+  $('versions').innerHTML=store.versions.map(v=>`<div>v${v.n} — ${v.note} <button data-v="${v.n}">rewind to here</button></div>`).join('');
+  document.querySelectorAll('button[data-v]').forEach(b=>b.onclick=async()=>{
+    await fetch(`/api/posts/${currentId}/rewind`,{method:'POST',headers:{...H(),'Content-Type':'application/json'},body:JSON.stringify({version:Number(b.dataset.v)})});
+    openPost(currentId);
+  });
+  $('sugs').innerHTML=(store.suggestions||[]).map(s=>`<div class="sug"><label><input type="checkbox" data-s="${s.id}" checked/> <span class="o">${escapeHtml(s.original)}</span> → <span class="n">${escapeHtml(s.replacement)}</span> <small>${escapeHtml(s.reason)}</small></label></div>`).join('')||'(no suggestions yet — hit Proofread)';
+}
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+$('proof').onclick=async()=>{
+  const r=await fetch(`/api/posts/${currentId}/proofread`,{method:'POST',headers:H()});const j=await r.json();
+  if(j.error){alert(j.error);return;}
+  store.suggestions=j.suggestions;store.mode=j.mode;openPost(currentId);
+};
+async function apply(ids){
+  const r=await fetch(`/api/posts/${currentId}/apply`,{method:'POST',headers:{...H(),'Content-Type':'application/json'},body:JSON.stringify({acceptedIds:ids})});
+  const j=await r.json();if(j.error){alert(j.error);return;}openPost(currentId);
+}
+$('apply').onclick=()=>{
+  const ids=[...document.querySelectorAll('input[data-s]:checked')].map(e=>e.dataset.s);apply(ids);
+};
+$('all').onclick=()=>apply((store.suggestions||[]).map(s=>s.id));
+$('push').onclick=async()=>{
+  const republish=$('republish').checked;
+  if(!confirm(republish?'Push + REPUBLISH live? Public page updates (no email).':'Push latest version to Substack? This edits the real draft.'))return;
+  const r=await fetch(`/api/posts/${currentId}/push`,{method:'POST',headers:{...H(),'Content-Type':'application/json'},body:JSON.stringify({republish})});
+  const j=await r.json();alert(j.error||`pushed v${j.pushedVersion}${j.republished?' (republished live)':' (draft only)'}`);
+};
+</script>
+</body>
+</html>

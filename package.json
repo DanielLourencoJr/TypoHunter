@@ -1,0 +1,13 @@
+{
+  "name": "substack-draft-reviewer",
+  "version": "0.1.0",
+  "description": "Local-first web reviewer for Substack drafts: diff approve, versioning, push back via direct SID",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  }
+}
