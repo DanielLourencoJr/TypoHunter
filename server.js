@@ -335,10 +335,9 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         // surface Groq rate limits as 429 (with retry hint) instead of generic 500
         if (/Groq HTTP 429/.test(e.message)) {
-          const m = /try again in ([\d.]+)s/i.exec(e.message);
           return send(res, 429, {
             error: String(e.message).slice(0, 500),
-            retryInSec: m ? Math.max(1, Math.ceil(Number(m[1]))) : 10,
+            retryInSec: e.retryInSec || 10,
           });
         }
         throw e;
