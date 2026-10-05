@@ -62,7 +62,7 @@ function pubsFromProfile(profile) {
 
 function send(res, code, obj) {
   const body = JSON.stringify(obj);
-  res.writeHead(code, { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) });
+  res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store", "Content-Length": Buffer.byteLength(body) });
   res.end(body);
 }
 
@@ -174,11 +174,11 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://localhost");
 
-    // static
+    // static (never cached: the UI evolves fast during testing)
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
       const f = path.join(ROOT, "public", "index.html");
       const html = fs.readFileSync(f, "utf8");
-      res.writeHead(200, { "Content-Type": "text/html" });
+      res.writeHead(200, { "Content-Type": "text/html", "Cache-Control": "no-store" });
       res.end(html);
       return;
     }

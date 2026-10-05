@@ -340,6 +340,64 @@ function diffBlock(h, reason, idx, withCtx = true) {
     `<div class="diff">${pre}<div class="dold"><span class="sign">−</span><span>${h.oldHtml}</span></div>` +
     `<div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div>${post}</div>`;
 }
+/* Line diff between two versions (committed changes v0 → current).
+   Small LCS table; falls back to a single replace-all hunk on huge inputs. */
+function diffLines(aText, bText, ctx = 2) {
+  const A = String(aText).split('\n'), B = String(bText).split('\n');
+  const n = A.length, m = B.length;
+  let ops;
+  if (n * m > 1000000) {
+    // fallback: trim common prefix/suffix, treat the middle as one big change
+    let pre = 0;
+    while (pre < n && pre < m && A[pre] === B[pre]) pre++;
+    let suf = 0;
+    while (suf < n - pre && suf < m - pre && A[n - 1 - suf] === B[m - 1 - suf]) suf++;
+    ops = [];
+    for (let k = 0; k < pre; k++) ops.push({ t: ' ', a: k, b: k });
+    for (let k = pre; k < n - suf; k++) ops.push({ t: '-', a: k });
+    for (let k = pre; k < m - suf; k++) ops.push({ t: '+', b: k });
+    for (let k = 0; k < suf; k++) ops.push({ t: ' ', a: n - suf + k, b: m - suf + k });
+  } else {
+    const W = m + 1;
+    const dp = new Uint32Array((n + 1) * W);
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i * W + j] = A[i] === B[j] ? dp[(i + 1) * W + j + 1] + 1 : Math.max(dp[(i + 1) * W + j], dp[i * W + j + 1]);
+      }
+    }
+    ops = [];
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (A[i] === B[j]) { ops.push({ t: ' ', a: i, b: j }); i++; j++; }
+      else if (dp[(i + 1) * W + j] >= dp[i * W + j + 1]) { ops.push({ t: '-', a: i }); i++; }
+      else { ops.push({ t: '+', b: j }); j++; }
+    }
+    while (i < n) { ops.push({ t: '-', a: i }); i++; }
+    while (j < m) { ops.push({ t: '+', b: j }); j++; }
+  }
+  // group changed ops into hunks with ctx context lines
+  const marked = new Set();
+  ops.forEach((op, p) => { if (op.t !== ' ') for (let k = Math.max(0, p - ctx); k <= Math.min(ops.length - 1, p + ctx); k++) marked.add(k); });
+  if (!marked.size) return ''; // identical
+  const sorted = [...marked].sort((x, y) => x - y);
+  const hunks = [];
+  let cur = null;
+  sorted.forEach((p) => {
+    if (!cur || p > cur.end + 1) { cur = { start: p, end: p }; hunks.push(cur); }
+    else cur.end = p;
+  });
+  return hunks.map((h, k) => {
+    const rows = [];
+    for (let p = h.start; p <= h.end; p++) {
+      const op = ops[p];
+      if (op.t === ' ') rows.push(`<div class="dctx">${esc(A[op.a]) || '&nbsp;'}</div>`);
+      else if (op.t === '-') rows.push(`<div class="dold"><span class="sign">−</span><span>${esc(A[op.a]) || '&nbsp;'}</span></div>`);
+      else rows.push(`<div class="dnew"><span class="sign">+</span><span>${esc(B[op.b]) || '&nbsp;'}</span></div>`);
+    }
+    return `<div class="hunkhead">hunk ${k + 1}</div><div class="diff">${rows.join('')}</div>`;
+  }).join('');
+}
+
 /* Preview diff INSIDE the text: the full article renders normally, but each
    checked fix is replaced in place by its -old/+new block, exactly where the
    line occurs. Same order + first-occurrence rules as Apply. */
@@ -480,9 +538,18 @@ function renderDoc() {
   else if (tab === 'prev') {
     $('doc').style.display = ''; $('raw').style.display = 'none';
     const checked = checkedSuggestions();
-    $('doc').innerHTML = checked.length
-      ? previewInline(body, checked)
-      : '<p class="hint">Check fixes in section 4 to preview the diff here.</p>';
+    const parts = [];
+    if (checked.length) {
+      parts.push('<h3>Pending fixes (checked in section 4)</h3>' + previewInline(body, checked));
+    }
+    if (store.versions.length > 1) {
+      const latest = store.versions[store.versions.length - 1];
+      const committed = diffLines(store.versions[0].md, latest.md);
+      parts.push(`<h3>Committed changes (v0 → v${latest.n})</h3>` +
+        (committed || '<p class="hint">No differences from the Substack original.</p>'));
+    }
+    if (!parts.length) parts.push('<p class="hint">Check fixes in section 4 to preview the diff here.</p>');
+    $('doc').innerHTML = parts.join('');
   }
   else {
     $('doc').style.display = ''; $('raw').style.display = 'none';
@@ -543,9 +610,9 @@ function renderVersions() {
 
 $('load').onclick = loadPosts;
 $('filter').oninput = renderPostLists;
-$('tabRead').onclick = () => { tab = 'read'; renderDoc(); };
-$('tabRaw').onclick = () => { tab = 'raw'; renderDoc(); };
-$('tabPrev').onclick = () => { tab = 'prev'; renderDoc(); };
+$('tabRead').onclick = () => { try { tab = 'read'; renderDoc(); } catch (e) { showErr('Render failed: ' + e.message, 'err3'); } };
+$('tabRaw').onclick = () => { try { tab = 'raw'; renderDoc(); } catch (e) { showErr('Render failed: ' + e.message, 'err3'); } };
+$('tabPrev').onclick = () => { try { tab = 'prev'; renderDoc(); } catch (e) { showErr('Preview failed: ' + e.message, 'err3'); } };
 
 $('proof').onclick = async () => {
   clearErr(); busy(true, $('proof'), 'Proofreading…');
