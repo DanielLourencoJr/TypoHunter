@@ -116,7 +116,8 @@ label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-item
     <div class="tabs">
       <button id="tabRead" class="ghost">Rendered</button>
       <button id="tabRaw" class="ghost">Raw markdown</button>
-      <button id="tabPrev" class="ghost">Preview diff</button>
+      <button id="tabPend" class="ghost">Pending fixes</button>
+      <button id="tabComm" class="ghost">Committed changes</button>
     </div>
     <div id="doc" class="doc"></div>
     <pre id="raw" class="raw" style="display:none"></pre>
@@ -535,21 +536,23 @@ function renderDoc() {
   $('mode').textContent = `v${latest.n} · ${latest.note} · engine: ${store.mode}`;
   $('raw').textContent = latest.md;
   if (tab === 'raw') { $('doc').style.display = 'none'; $('raw').style.display = ''; }
-  else if (tab === 'prev') {
+  else if (tab === 'pend') {
     $('doc').style.display = ''; $('raw').style.display = 'none';
     const checked = checkedSuggestions();
-    const parts = [];
-    if (checked.length) {
-      parts.push('<h3>Pending fixes (checked in section 4)</h3>' + previewInline(body, checked));
-    }
-    if (store.versions.length > 1) {
+    $('doc').innerHTML = checked.length
+      ? previewInline(body, checked)
+      : '<p class="hint">Check fixes in section 4 to preview them here, inside the text.</p>';
+  }
+  else if (tab === 'comm') {
+    $('doc').style.display = ''; $('raw').style.display = 'none';
+    if (store.versions.length < 2) {
+      $('doc').innerHTML = '<p class="hint">Nothing applied yet — v0 is the Substack original.</p>';
+    } else {
       const latest = store.versions[store.versions.length - 1];
       const committed = diffLines(store.versions[0].md, latest.md);
-      parts.push(`<h3>Committed changes (v0 → v${latest.n})</h3>` +
-        (committed || '<p class="hint">No differences from the Substack original.</p>'));
+      $('doc').innerHTML = `<p class="hint">v0 → v${latest.n}</p>` +
+        (committed || '<p class="hint">No differences from the Substack original.</p>');
     }
-    if (!parts.length) parts.push('<p class="hint">Check fixes in section 4 to preview the diff here.</p>');
-    $('doc').innerHTML = parts.join('');
   }
   else {
     $('doc').style.display = ''; $('raw').style.display = 'none';
@@ -586,7 +589,7 @@ function renderSugs() {
     </details>` : '');
   document.querySelectorAll('#sugs input').forEach(c => c.onchange = () => {
     c.closest('.sug').classList.toggle('off', !c.checked);
-    if (tab === 'prev') renderDoc();
+    if (tab === 'pend') renderDoc();
   });
 }
 
@@ -612,7 +615,8 @@ $('load').onclick = loadPosts;
 $('filter').oninput = renderPostLists;
 $('tabRead').onclick = () => { try { tab = 'read'; renderDoc(); } catch (e) { showErr('Render failed: ' + e.message, 'err3'); } };
 $('tabRaw').onclick = () => { try { tab = 'raw'; renderDoc(); } catch (e) { showErr('Render failed: ' + e.message, 'err3'); } };
-$('tabPrev').onclick = () => { try { tab = 'prev'; renderDoc(); } catch (e) { showErr('Preview failed: ' + e.message, 'err3'); } };
+$('tabPend').onclick = () => { try { tab = 'pend'; renderDoc(); } catch (e) { showErr('Preview failed: ' + e.message, 'err3'); } };
+$('tabComm').onclick = () => { try { tab = 'comm'; renderDoc(); } catch (e) { showErr('Preview failed: ' + e.message, 'err3'); } };
 
 $('proof').onclick = async () => {
   clearErr(); busy(true, $('proof'), 'Proofreading…');
