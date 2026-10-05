@@ -53,6 +53,7 @@ button.accent{background:var(--accent);border-color:var(--accent)}
 .dold{background:#fef2f2}
 .dnew{background:#f0fdf4;border-top:1px solid var(--line)}
 .sign{font-family:ui-monospace,SFMono-Regular,monospace;opacity:.45;user-select:none;flex:none}
+.dctx{padding:2px 10px 2px 28px;color:var(--muted);font-size:13px;word-break:break-word}
 .hl-old{background:#fecaca;border-radius:3px;padding:0 2px;font-weight:700}
 .hl-new{background:#bbf7d0;border-radius:3px;padding:0 2px;font-weight:700}
 .sug{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;font-family:system-ui;font-size:14px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.04)}
@@ -288,22 +289,38 @@ function emphLine(line, needle, cls) {
   if (i === -1 || !needle) return esc(line);
   return esc(line.slice(0, i)) + `<span class="${cls}">${esc(needle)}</span>` + esc(line.slice(i + needle.length));
 }
-function diffHunk(md, s) {
+function diffHunk(md, s, ctx = 2) {
   const lines = String(md).split('\n');
+  let idx = -1, oldLine = '', nl = '', run = s.original, newNeedle = s.replacement;
   if (s.original === '  (double space)') {
-    const line = lines.find(l => /[^ ]  +[^ ]/.test(l)) || '';
-    const run = (line.match(/  +/) || [''])[0];
-    const nl = line.replace(/  +/g, ' ');
-    return { old: line, nl, oldHtml: emphLine(line, run, 'hl-old'), newHtml: emphLine(nl, ' ', 'hl-new') };
+    idx = lines.findIndex(l => /[^ ]  +[^ ]/.test(l));
+    oldLine = idx === -1 ? '' : lines[idx];
+    run = (oldLine.match(/  +/) || [''])[0];
+    nl = oldLine.replace(/  +/g, ' ');
+    newNeedle = ' ';
+  } else {
+    idx = lines.findIndex(l => l.includes(s.original));
+    oldLine = idx === -1 ? s.original : lines[idx];
+    nl = idx === -1 ? s.replacement : oldLine.replace(s.original, s.replacement);
   }
-  const line = lines.find(l => l.includes(s.original)) ?? s.original;
-  const nl = line.includes(s.original) ? line.replace(s.original, s.replacement) : s.replacement;
-  return { old: line, nl, oldHtml: emphLine(line, s.original, 'hl-old'), newHtml: emphLine(nl, s.replacement, 'hl-new') };
+  const pre = [], post = [];
+  if (idx !== -1) {
+    for (let k = Math.max(0, idx - ctx); k < idx; k++) pre.push(lines[k]);
+    for (let k = idx + 1; k <= Math.min(lines.length - 1, idx + ctx); k++) post.push(lines[k]);
+  }
+  return {
+    old: oldLine, nl,
+    oldHtml: emphLine(oldLine, run, 'hl-old'),
+    newHtml: emphLine(nl, newNeedle, 'hl-new'),
+    pre: pre.map(esc), post: post.map(esc),
+  };
 }
-function diffBlock(h, reason, idx) {
+function diffBlock(h, reason, idx, withCtx = true) {
+  const pre = withCtx ? h.pre.map(l => `<div class="dctx">${l || '&nbsp;'}</div>`).join('') : '';
+  const post = withCtx ? h.post.map(l => `<div class="dctx">${l || '&nbsp;'}</div>`).join('') : '';
   return `${idx != null ? `<div class="hunkhead">fix ${idx}${reason ? ` · ${esc(reason)}` : ''}</div>` : ''}` +
-    `<div class="diff"><div class="dold"><span class="sign">−</span><span>${h.oldHtml}</span></div>` +
-    `<div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div></div>`;
+    `<div class="diff">${pre}<div class="dold"><span class="sign">−</span><span>${h.oldHtml}</span></div>` +
+    `<div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div>${post}</div>`;
 }
 /* Preview diff INSIDE the text: the full article renders normally, but each
    checked fix is replaced in place by its -old/+new block, exactly where the
@@ -319,7 +336,7 @@ function previewInline(bodyMd, suggestions) {
       ? lines.findIndex(l => /[^ ]  +[^ ]/.test(l))
       : lines.findIndex(l => l.includes(s.original));
     if (idx === -1) { skipped.push(k + 1); return; }
-    blocks.push(diffBlock(diffHunk(cur, s), s.reason, k + 1));
+    blocks.push(diffBlock(diffHunk(cur, s), s.reason, k + 1, false));
     const list = atLine.get(idx) || [];
     list.push(blocks.length - 1);
     atLine.set(idx, list);
@@ -386,7 +403,7 @@ function renderPostLists() {
 }
 
 async function openPost(id, edition) {
-  clearErr(); currentId = id;
+  clearErr(); currentId = id; tab = 'read';
   if (edition) currentEdition = edition;
   setStatus('opening…', 'busy');
   try {

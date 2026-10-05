@@ -313,6 +313,7 @@ const server = http.createServer(async (req, res) => {
         note: `applied ${accepted.length}/${es.suggestions.length} (${es.mode})`,
         createdAt: new Date().toISOString(),
       });
+      es.suggestions = []; // consumed into the new version — re-proofread for more
       saveStore(id, store);
       return send(res, 200, { store: es });
     }
