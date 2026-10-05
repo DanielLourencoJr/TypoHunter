@@ -341,9 +341,8 @@ function diffBlock(h, reason, idx, withCtx = true) {
     `<div class="diff">${pre}<div class="dold"><span class="sign">−</span><span>${h.oldHtml}</span></div>` +
     `<div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div>${post}</div>`;
 }
-/* Line diff between two versions (committed changes v0 → current).
-   Small LCS table; falls back to a single replace-all hunk on huge inputs. */
-function diffLines(aText, bText, ctx = 2) {
+/* Line ops between two texts (LCS; prefix/suffix fallback on huge inputs). */
+function lineOps(aText, bText) {
   const A = String(aText).split('\n'), B = String(bText).split('\n');
   const n = A.length, m = B.length;
   let ops;
@@ -376,10 +375,11 @@ function diffLines(aText, bText, ctx = 2) {
     while (i < n) { ops.push({ t: '-', a: i }); i++; }
     while (j < m) { ops.push({ t: '+', b: j }); j++; }
   }
-  // group changed ops into hunks with ctx context lines
+  return { A, B, ops };
+}
+function groupHunks(ops, ctx) {
   const marked = new Set();
   ops.forEach((op, p) => { if (op.t !== ' ') for (let k = Math.max(0, p - ctx); k <= Math.min(ops.length - 1, p + ctx); k++) marked.add(k); });
-  if (!marked.size) return ''; // identical
   const sorted = [...marked].sort((x, y) => x - y);
   const hunks = [];
   let cur = null;
@@ -387,16 +387,49 @@ function diffLines(aText, bText, ctx = 2) {
     if (!cur || p > cur.end + 1) { cur = { start: p, end: p }; hunks.push(cur); }
     else cur.end = p;
   });
-  return hunks.map((h, k) => {
+  return hunks;
+}
+/* Shared layout for both diff tabs: full text with .diff blocks embedded in
+   place. placements: [{line, span, html}] in body coordinates. */
+function embedBlocks(bodyMd, placements) {
+  const covered = new Set();
+  const byLine = new Map();
+  placements.forEach((p, k) => {
+    for (let l = p.line; l < p.line + p.span; l++) covered.add(l);
+    if (!byLine.has(p.line)) byLine.set(p.line, []);
+    byLine.get(p.line).push(k);
+  });
+  const htmlBlocks = placements.map(p => p.html);
+  const out = [];
+  bodyMd.split('\n').forEach((ln, i) => {
+    if (byLine.has(i)) byLine.get(i).forEach(k => out.push(`\u0000DIF${k}\u0000`));
+    else if (!covered.has(i)) out.push(ln);
+  });
+  let html = renderMarkdown(out.join('\n'));
+  html = html.replace(/<p>\u0000DIF(\d+)\u0000<\/p>/g, (mm, nn) => `\u0000DIF${nn}\u0000`);
+  return html.replace(/\u0000DIF(\d+)\u0000/g, (mm, nn) => htmlBlocks[Number(nn)] ?? mm);
+}
+/* Committed changes as inline blocks: same layout as the pending-fixes tab,
+   sourced from the v0 → current version diff instead of suggestions. */
+function inlineVersionDiff(oldBody, newBody) {
+  const { A, B, ops } = lineOps(oldBody, newBody);
+  if (!ops.some(o => o.t !== ' ')) return '';
+  const placements = [];
+  groupHunks(ops, 2).forEach((h) => {
+    let ai = 0, bi = 0;
+    for (let p = 0; p < h.start; p++) { const o = ops[p]; if (o.t !== '+') ai++; if (o.t !== '-') bi++; }
+    const startA = ai;
+    let spanA = 0;
     const rows = [];
     for (let p = h.start; p <= h.end; p++) {
-      const op = ops[p];
-      if (op.t === ' ') rows.push(`<div class="dctx">${esc(A[op.a]) || '&nbsp;'}</div>`);
-      else if (op.t === '-') rows.push(`<div class="dold"><span class="sign">−</span><span>${esc(A[op.a]) || '&nbsp;'}</span></div>`);
-      else rows.push(`<div class="dnew"><span class="sign">+</span><span>${esc(B[op.b]) || '&nbsp;'}</span></div>`);
+      const o = ops[p];
+      if (o.t === ' ') { rows.push(`<div class="dctx">${esc(A[ai]) || '&nbsp;'}</div>`); ai++; bi++; spanA++; }
+      else if (o.t === '-') { rows.push(`<div class="dold"><span class="sign">−</span><span>${esc(A[ai]) || '&nbsp;'}</span></div>`); ai++; spanA++; }
+      else { rows.push(`<div class="dnew"><span class="sign">+</span><span>${esc(B[bi]) || '&nbsp;'}</span></div>`); bi++; }
     }
-    return `<div class="hunkhead">hunk ${k + 1}</div><div class="diff">${rows.join('')}</div>`;
-  }).join('');
+    placements.push({ line: startA, span: spanA, html: `<div class="diff">${rows.join('')}</div>` });
+  });
+  return embedBlocks(oldBody, placements);
 }
 
 /* Preview diff INSIDE the text: the full article renders normally, but each
@@ -404,8 +437,7 @@ function diffLines(aText, bText, ctx = 2) {
    line occurs. Same order + first-occurrence rules as Apply. */
 function previewInline(bodyMd, suggestions) {
   let cur = bodyMd;
-  const blocks = [];
-  const marks = []; // {orig, span, bi} in ORIGINAL bodyMd coordinates
+  const placements = [];
   const skipped = [];
   let delta = 0; // cumulative line-count drift from already-walked fixes
   suggestions.forEach((s, k) => {
@@ -415,28 +447,17 @@ function previewInline(bodyMd, suggestions) {
     const eIdx = cur.slice(0, pos).split('\n').length - 1;
     const spanOrig = s.original === '  (double space)' ? 1 : s.original.split('\n').length;
     const spanNew = s.original === '  (double space)' ? 1 : s.replacement.split('\n').length;
-    blocks.push(diffBlock(diffHunk(cur, s), s.reason, k + 1, false));
-    marks.push({ orig: eIdx - delta, span: spanOrig, bi: blocks.length - 1 });
+    placements.push({
+      line: eIdx - delta,
+      span: spanOrig,
+      html: diffBlock(diffHunk(cur, s), s.reason, k + 1, false),
+    });
     // evolve exactly like server apply (full-text, first occurrence)
     if (s.original === '  (double space)') cur = cur.replace(/[^ ]  +[^ ]/g, m => m.replace(/  +/g, ' '));
     else { const i = cur.indexOf(s.original); if (i !== -1) cur = cur.slice(0, i) + s.replacement + cur.slice(i + s.original.length); }
     delta += spanNew - spanOrig;
   });
-  const covered = new Set();
-  marks.forEach(mk => { for (let l = mk.orig; l < mk.orig + mk.span; l++) covered.add(l); });
-  const byLine = new Map();
-  marks.forEach(mk => {
-    if (!byLine.has(mk.orig)) byLine.set(mk.orig, []);
-    byLine.get(mk.orig).push(mk.bi);
-  });
-  const out = [];
-  bodyMd.split('\n').forEach((ln, i) => {
-    if (byLine.has(i)) byLine.get(i).forEach(bi => out.push(`\u0000DIF${bi}\u0000`));
-    else if (!covered.has(i)) out.push(ln);
-  });
-  let html = renderMarkdown(out.join('\n'));
-  html = html.replace(/<p>\u0000DIF(\d+)\u0000<\/p>/g, (m, n) => `\u0000DIF${n}\u0000`);
-  html = html.replace(/\u0000DIF(\d+)\u0000/g, (m, n) => blocks[Number(n)] ?? m);
+  let html = embedBlocks(bodyMd, placements);
   if (skipped.length) html += `<p class="hint">fix ${skipped.join(', ')} not shown (outside the text body or overlapped by another fix).</p>`;
   return html;
 }
@@ -549,8 +570,8 @@ function renderDoc() {
       $('doc').innerHTML = '<p class="hint">Nothing applied yet — v0 is the Substack original.</p>';
     } else {
       const latest = store.versions[store.versions.length - 1];
-      const committed = diffLines(store.versions[0].md, latest.md);
-      $('doc').innerHTML = `<p class="hint">v0 → v${latest.n}</p>` +
+      const committed = inlineVersionDiff(splitFm(store.versions[0].md).body, splitFm(latest.md).body);
+      $('doc').innerHTML = `<p class="hint">v0 → v${latest.n}, inside the text</p>` +
         (committed || '<p class="hint">No differences from the Substack original.</p>');
     }
   }
