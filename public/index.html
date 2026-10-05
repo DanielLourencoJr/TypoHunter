@@ -379,6 +379,23 @@ function embedBlocks(bodyMd, placements) {
   html = html.replace(/<p>\u0000DIF(\d+)\u0000<\/p>/g, (mm, nn) => `\u0000DIF${nn}\u0000`);
   return html.replace(/\u0000DIF(\d+)\u0000/g, (mm, nn) => htmlBlocks[Number(nn)] ?? mm);
 }
+/* Word highlight for a changed line pair (GitHub-style): common prefix/suffix
+   stay plain, the middle gets the red/green term highlight. */
+function wordPair(oldLine, newLine) {
+  let pre = 0;
+  while (pre < oldLine.length && pre < newLine.length && oldLine[pre] === newLine[pre]) pre++;
+  let suf = 0;
+  while (suf < oldLine.length - pre && suf < newLine.length - pre &&
+    oldLine[oldLine.length - 1 - suf] === newLine[newLine.length - 1 - suf]) suf++;
+  const oMid = oldLine.slice(pre, oldLine.length - suf);
+  const nMid = newLine.slice(pre, newLine.length - suf);
+  const open = esc(oldLine.slice(0, pre));
+  const close = esc(oldLine.slice(oldLine.length - suf));
+  return {
+    oldHtml: open + (oMid ? `<span class="hl-old">${esc(oMid)}</span>` : '') + close || '&nbsp;',
+    newHtml: open + (nMid ? `<span class="hl-new">${esc(nMid)}</span>` : '') + close || '&nbsp;',
+  };
+}
 /* Committed changes as inline blocks: same layout as the pending-fixes tab,
    sourced from the v0 → current version diff instead of suggestions. */
 function inlineVersionDiff(oldBody, newBody) {
@@ -390,12 +407,24 @@ function inlineVersionDiff(oldBody, newBody) {
     for (let p = 0; p < h.start; p++) { const o = ops[p]; if (o.t !== '+') ai++; if (o.t !== '-') bi++; }
     const startA = ai;
     let spanA = 0;
-    const rows = [];
+    const dels = [], adds = [];
     for (let p = h.start; p <= h.end; p++) {
       const o = ops[p];
-      if (o.t === ' ') { rows.push(`<div class="dctx">${esc(A[ai]) || '&nbsp;'}</div>`); ai++; bi++; spanA++; }
-      else if (o.t === '-') { rows.push(`<div class="dold"><span class="sign">−</span><span>${esc(A[ai]) || '&nbsp;'}</span></div>`); ai++; spanA++; }
-      else { rows.push(`<div class="dnew"><span class="sign">+</span><span>${esc(B[bi]) || '&nbsp;'}</span></div>`); bi++; }
+      if (o.t === '-') { dels.push(A[ai]); ai++; spanA++; }
+      else if (o.t === '+') { adds.push(B[bi]); bi++; }
+    }
+    const rows = [];
+    const pairs = Math.max(dels.length, adds.length);
+    for (let k = 0; k < pairs; k++) {
+      if (k < dels.length && k < adds.length) {
+        const w = wordPair(dels[k], adds[k]);
+        rows.push(`<div class="dold"><span class="sign">−</span><span>${w.oldHtml}</span></div>`);
+        rows.push(`<div class="dnew"><span class="sign">+</span><span>${w.newHtml}</span></div>`);
+      } else if (k < dels.length) {
+        rows.push(`<div class="dold"><span class="sign">−</span><span>${esc(dels[k]) || '&nbsp;'}</span></div>`);
+      } else {
+        rows.push(`<div class="dnew"><span class="sign">+</span><span>${esc(adds[k]) || '&nbsp;'}</span></div>`);
+      }
     }
     placements.push({ line: startA, span: spanA, html: `<div class="diff">${rows.join('')}</div>` });
   });
