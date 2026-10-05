@@ -321,11 +321,13 @@ async function openPost(id) {
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     store = j.store;
-    $('work').style.display = ''; $('pushCard').style.display = '';
+    $('work').style.display = '';
     $('wtitle').textContent = ' ' + (j.title || '#' + id);
     renderPostLists(); renderDoc(); renderVersions();
     if (store.suggestions?.length) { $('sugCard').style.display = ''; renderSugs(); }
     else { $('sugCard').style.display = 'none'; $('sugs').innerHTML = ''; $('count').textContent = ''; }
+    // nothing to send back until a fix was applied (v0 is identical to Substack)
+    $('pushCard').style.display = store.versions.length > 1 ? '' : 'none';
     setStatus('ready');
   } catch (e) { showErr(e.message); }
 }
