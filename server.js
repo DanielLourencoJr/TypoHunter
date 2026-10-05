@@ -193,7 +193,13 @@ const server = http.createServer(async (req, res) => {
           }
         }
       }
-      return send(res, 200, { id, title: draft.draft_title || draft.title, subtitle: draft.draft_subtitle, store });
+      return send(res, 200, {
+        id,
+        title: draft.draft_title || draft.title,
+        subtitle: draft.draft_subtitle,
+        translations: (draft.post_translations || []).map((t) => ({ language: t.language, title: t.draft_title })),
+        store,
+      });
     }
 
     // proofread latest version
@@ -251,6 +257,8 @@ const server = http.createServer(async (req, res) => {
       if (!target) return send(res, 404, { error: "version not found" });
       // draftToMarkdown emits frontmatter (title/subtitle/audience/id) — strip it
       // before mdToTiptap, otherwise it becomes visible ---/text in the post.
+      // NOTE: PUT carries no `translations` field, so other language editions
+      // are left untouched (verified live: EN edition survived updateDraft).
       const { data: fm, body: cleanMd } = parseFrontmatter(target.md);
       const result = await updateDraft({
         sid, publicationUrl: pub, id,

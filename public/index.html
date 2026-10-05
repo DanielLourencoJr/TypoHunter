@@ -323,6 +323,7 @@ async function openPost(id) {
     store = j.store;
     $('work').style.display = '';
     $('wtitle').textContent = ' ' + (j.title || '#' + id);
+    window._translations = j.translations || [];
     renderPostLists(); renderDoc(); renderVersions();
     if (store.suggestions?.length) { $('sugCard').style.display = ''; renderSugs(); }
     else { $('sugCard').style.display = 'none'; $('sugs').innerHTML = ''; $('count').textContent = ''; }
@@ -335,7 +336,9 @@ async function openPost(id) {
 function currentBody() { return splitFm(store.versions[store.versions.length - 1].md); }
 function renderDoc() {
   const { meta, body } = currentBody();
+  const tr = (window._translations || []).map(t => t.language.toUpperCase()).join(', ');
   $('docmeta').textContent = [meta.title && ('Title: ' + meta.title), meta.subtitle && ('Subtitle: ' + meta.subtitle), meta.audience && ('Audience: ' + meta.audience)].filter(Boolean).join('  ·  ') || ('Version v' + (store.versions.length - 1));
+  if (tr) $('docmeta').textContent += `  ·  Also in ${tr} (editions preserved, not proofread)`;
   const latest = store.versions[store.versions.length - 1];
   $('mode').textContent = `v${latest.n} · ${latest.note} · engine: ${store.mode}`;
   $('raw').textContent = latest.md;
