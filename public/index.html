@@ -450,6 +450,7 @@ function renderDoc() {
 
 function renderSugs() {
   const sugs = store.suggestions || [];
+  const md = store.versions[store.versions.length - 1].md;
   if (!sugs.length) {
     $('count').textContent = `0 suggestions · engine ${store.mode}`;
     $('sugs').innerHTML = '<p class="hint">No fixes needed — the text looks clean.</p>';
