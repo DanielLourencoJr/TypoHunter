@@ -310,6 +310,10 @@ function previewHunks(md, suggestions) {
   return out.join('');
 }
 
+function checkedSuggestions() {
+  return (store.suggestions || []).filter(s => document.querySelector(`input[data-s="${s.id}"]`)?.checked);
+}
+
 /* --- flow --- */
 async function loadPubs() {
   setStatus('connecting…', 'busy');
