@@ -78,6 +78,7 @@ button:hover:not(:disabled){filter:brightness(1.12)}
 pre.raw{white-space:pre-wrap;background:#f5f5f4;padding:12px;border-radius:8px;font-size:13px;max-height:400px;overflow:auto}
 .hint{font-family:system-ui;font-size:13px;color:var(--muted)}
 #err{display:none;background:var(--red-bg);color:var(--red);border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-family:system-ui;font-size:14px}
+.err{display:none;background:var(--red-bg);color:var(--red);border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-family:system-ui;font-size:14px;margin-top:10px}
 .footer-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
 label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-items:center}
 </style>
@@ -88,14 +89,13 @@ label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-item
   <span id="status" class="pill">starting…</span>
 </div>
 <main>
-  <div id="err"></div>
-
   <section class="card">
     <h2><span class="step">1</span>Publication</h2>
     <div class="row">
       <select id="pub"><option value="">loading…</option></select>
       <button id="load">Load posts</button>
     </div>
+    <div class="err" id="err1"></div>
   </section>
 
   <section class="card">
@@ -105,6 +105,7 @@ label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-item
       <div><h3 style="font-family:system-ui;font-size:13px;color:var(--muted)">Drafts</h3><div id="drafts" class="postlist"></div></div>
       <div><h3 style="font-family:system-ui;font-size:13px;color:var(--muted)">Published</h3><div id="pubd" class="postlist"></div></div>
     </div>
+    <div class="err" id="err2"></div>
   </section>
 
   <section class="card" id="work" style="display:none">
@@ -122,6 +123,7 @@ label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-item
       <button id="proof" class="accent">Proofread this version</button>
       <span id="mode" class="hint"></span>
     </div>
+    <div class="err" id="err3"></div>
   </section>
 
   <section class="card" id="sugCard" style="display:none">
@@ -132,6 +134,7 @@ label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-item
       <button id="none" class="ghost">Uncheck all</button>
       <span id="count" class="hint"></span>
     </div>
+    <div class="err" id="err4"></div>
     <div id="sugs"></div>
   </section>
 
@@ -142,6 +145,7 @@ label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-item
       <label class="check"><input type="checkbox" id="republish" /> Republish live <span class="hint">(published posts only · updates public page, no email)</span></label>
       <span id="pushhint" class="hint"></span>
     </div>
+    <div class="err" id="err5"></div>
     <p class="hint">Nothing touches Substack until you press Push. Rewind below restores any earlier version locally first.</p>
     <h2 style="margin-top:16px"><span class="step">↺</span>Version history</h2>
     <div id="versions"></div>
@@ -150,15 +154,19 @@ label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-item
 
 <script>
 const $ = id => document.getElementById(id);
-const statusEl = $('status'), errEl = $('err');
+const statusEl = $('status');
 const pubEl = $('pub');
 let currentId = null, store = null, tab = 'read';
 let currentEdition = 'original', currentLang = null, currentIsPublished = false, currentTranslations = [];
 function EQ() { return `?edition=${encodeURIComponent(currentEdition)}`; }
 
 function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = 'pill' + (cls ? ' ' + cls : ''); }
-function showErr(m) { errEl.style.display = 'block'; errEl.textContent = m; setStatus('error', 'err'); }
-function clearErr() { errEl.style.display = 'none'; }
+function showErr(m, where) {
+  const el = $(where || 'err1');
+  if (el) { el.style.display = 'block'; el.textContent = m; }
+  setStatus('error', 'err');
+}
+function clearErr() { document.querySelectorAll('.err').forEach(e => { e.style.display = 'none'; e.textContent = ''; }); }
 function busy(on, btn, label) {
   document.querySelectorAll('button').forEach(b => { if (btn && b === btn) return; });
   if (btn) { btn.disabled = on; if (label) btn.dataset.label = btn.textContent, btn.textContent = label; else if (btn.dataset.label) btn.textContent = btn.dataset.label, delete btn.dataset.label; }
@@ -297,17 +305,39 @@ function diffBlock(h, reason, idx) {
     `<div class="diff"><div class="dold"><span class="sign">−</span><span>${h.oldHtml}</span></div>` +
     `<div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div></div>`;
 }
-/* Preview walk: same order + same first-occurrence rules as the server apply. */
-function previewHunks(md, suggestions) {
-  let cur = md;
-  const out = [];
+/* Preview diff INSIDE the text: the full article renders normally, but each
+   checked fix is replaced in place by its -old/+new block, exactly where the
+   line occurs. Same order + first-occurrence rules as Apply. */
+function previewInline(bodyMd, suggestions) {
+  let cur = bodyMd;
+  const blocks = [];
+  const atLine = new Map();
+  const skipped = [];
   suggestions.forEach((s, k) => {
-    const h = diffHunk(cur, s);
-    out.push(diffBlock(h, s.reason, k + 1));
-    if (s.original === '  (double space)') cur = cur.replace(/[^ ]  +[^ ]/g, m => m.replace(/  +/g, ' '));
-    else { const i = cur.indexOf(s.original); if (i !== -1) cur = cur.slice(0, i) + s.replacement + cur.slice(i + s.original.length); }
+    const lines = cur.split('\n');
+    const idx = s.original === '  (double space)'
+      ? lines.findIndex(l => /[^ ]  +[^ ]/.test(l))
+      : lines.findIndex(l => l.includes(s.original));
+    if (idx === -1) { skipped.push(k + 1); return; }
+    blocks.push(diffBlock(diffHunk(cur, s), s.reason, k + 1));
+    const list = atLine.get(idx) || [];
+    list.push(blocks.length - 1);
+    atLine.set(idx, list);
+    const arr = cur.split('\n');
+    if (s.original === '  (double space)') arr[idx] = arr[idx].replace(/  +/g, ' ');
+    else arr[idx] = arr[idx].replace(s.original, s.replacement);
+    cur = arr.join('\n');
   });
-  return out.join('');
+  const out = [];
+  bodyMd.split('\n').forEach((ln, i) => {
+    if (atLine.has(i)) atLine.get(i).forEach(bi => out.push(`\u0000DIF${bi}\u0000`));
+    else out.push(ln);
+  });
+  let html = renderMarkdown(out.join('\n'));
+  html = html.replace(/<p>\u0000DIF(\d+)\u0000<\/p>/g, (m, n) => `\u0000DIF${n}\u0000`);
+  html = html.replace(/\u0000DIF(\d+)\u0000/g, (m, n) => blocks[Number(n)] ?? m);
+  if (skipped.length) html += `<p class="hint">fix ${skipped.join(', ')} not shown (outside the text body or overlapped by another fix).</p>`;
+  return html;
 }
 
 function checkedSuggestions() {
@@ -327,7 +357,7 @@ async function loadPubs() {
     else if (j.pubs.length) localStorage.setItem('pub', pubEl.value);
     setStatus('ready');
     loadPosts();
-  } catch (e) { showErr('Could not reach Substack: ' + e.message); }
+  } catch (e) { showErr('Could not reach Substack: ' + e.message, 'err1'); }
 }
 
 let allPosts = { drafts: [], published: [] };
@@ -342,7 +372,7 @@ async function loadPosts() {
     }
     if (j.error) throw new Error(j.error);
     allPosts = j; renderPostLists(); setStatus('ready');
-  } catch (e) { showErr(e.message); }
+  } catch (e) { showErr(e.message, 'err2'); }
 }
 function postBtn(p) {
   return `<button class="postitem${p.id === currentId ? ' active' : ''}" data-id="${p.id}">${esc(p.title || '(untitled)')}<small>#${p.id}${p.updated ? ' · ' + p.updated.slice(0, 10) : ''}</small></button>`;
@@ -374,7 +404,7 @@ async function openPost(id, edition) {
     $('pushCard').style.display = store.versions.length > 1 ? '' : 'none';
     updatePushState();
     setStatus('ready');
-  } catch (e) { showErr(e.message); }
+  } catch (e) { showErr(e.message, 'err2'); }
 }
 
 function renderEdTabs() {
@@ -409,7 +439,7 @@ function renderDoc() {
     $('doc').style.display = ''; $('raw').style.display = 'none';
     const checked = checkedSuggestions();
     $('doc').innerHTML = checked.length
-      ? previewHunks(latest.md, checked)
+      ? previewInline(body, checked)
       : '<p class="hint">Check fixes in section 4 to preview the diff here.</p>';
   }
   else {
@@ -449,7 +479,7 @@ function renderVersions() {
       const r = await fetch(`/api/posts/${currentId}/rewind${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ version: Number(b.dataset.v) }) });
       const j = await r.json(); if (j.error) throw new Error(j.error);
       store = j.store; renderDoc(); renderVersions(); setStatus('ready');
-    } catch (e) { showErr(e.message); } finally { busy(false); }
+    } catch (e) { showErr(e.message, 'err5'); } finally { busy(false); }
   });
 }
 
@@ -467,7 +497,7 @@ $('proof').onclick = async () => {
     store.suggestions = j.suggestions; store.mode = j.mode;
     $('sugCard').style.display = '';
     renderSugs(); renderDoc(); setStatus(j.suggestions.length ? `${j.suggestions.length} fixes proposed` : 'clean — no fixes');
-  } catch (e) { showErr(e.message); } finally { busy(false, $('proof')); }
+  } catch (e) { showErr(e.message, 'err3'); } finally { busy(false, $('proof')); }
 };
 
 async function applyIds(ids) {
@@ -476,11 +506,11 @@ async function applyIds(ids) {
     const r = await fetch(`/api/posts/${currentId}/apply${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ acceptedIds: ids }) });
     const j = await r.json(); if (j.error) throw new Error(j.error);
     await openPost(currentId);
-  } catch (e) { showErr(e.message); busy(false); }
-}
+  } catch (e) { showErr(e.message, 'err4'); busy(false); }
+};
 $('apply').onclick = () => {
   const ids = [...document.querySelectorAll('#sugs input:checked')].map(e => e.dataset.s);
-  if (!ids.length) return showErr('Check at least one fix first.');
+  if (!ids.length) return showErr('Check at least one fix first.', 'err4');
   applyIds(ids);
 };
 $('all').onclick = () => document.querySelectorAll('#sugs input').forEach(c => { c.checked = true; c.closest('.sug').classList.remove('off'); });
@@ -495,7 +525,7 @@ $('push').onclick = async () => {
     const j = await r.json(); if (j.error) throw new Error(j.error);
     setStatus(`pushed v${j.pushedVersion}${j.republished ? ' + republished' : ''}`);
     await openPost(currentId);
-  } catch (e) { showErr(e.message); } finally { busy(false, $('push')); }
+  } catch (e) { showErr(e.message, 'err5'); } finally { busy(false, $('push')); }
 };
 
 loadPubs();
