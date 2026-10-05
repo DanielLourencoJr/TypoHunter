@@ -159,7 +159,7 @@ const server = http.createServer(async (req, res) => {
         };
         saveStore(id, store);
       }
-      return send(res, 200, { id, title: draft.draft_title, subtitle: draft.draft_subtitle, store });
+      return send(res, 200, { id, title: draft.draft_title || draft.title, subtitle: draft.draft_subtitle, store });
     }
 
     // proofread latest version
