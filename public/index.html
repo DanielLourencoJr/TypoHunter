@@ -450,8 +450,11 @@ function renderDoc() {
 
 function renderSugs() {
   const sugs = store.suggestions || [];
-  const md = store.versions[store.versions.length - 1].md;
-  $('count').textContent = sugs.length ? `${sugs.length} suggestion${sugs.length > 1 ? 's' : ''} · engine ${store.mode}` : '';
+  if (!sugs.length) {
+    $('count').textContent = `0 suggestions · engine ${store.mode}`;
+    $('sugs').innerHTML = '<p class="hint">No fixes needed — the text looks clean.</p>';
+    return;
+  }
   $('sugs').innerHTML = sugs.map((s, k) => `
     <div class="sug" data-wrap="${s.id}">
       <label class="sughead"><input type="checkbox" data-s="${s.id}" checked />
