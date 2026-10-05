@@ -3,9 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchProfileSelf } from "../SubstackCLI/lib/auth.js";
-import { getDraft, listDrafts, listPublished, updateDraft, publishDraft } from "../SubstackCLI/lib/drafts.js";
-import { draftToMarkdown } from "../SubstackCLI/lib/convert.js";
-import { parseFrontmatter } from "../SubstackCLI/lib/frontmatter.js";
+import { getDraft, listDrafts, listPublished, updateDraft, publishDraft, translateDraft } from "../SubstackCLI/lib/drafts.js";
+import { draftToMarkdown, tiptapToMarkdown } from "../SubstackCLI/lib/convert.js";
+import { parseFrontmatter, stringifyFrontmatter } from "../SubstackCLI/lib/frontmatter.js";
 import { proofreadMarkdown, applySuggestions } from "./lib/proofread.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -95,6 +95,81 @@ function latestMarkdown(store) {
   return store.versions[store.versions.length - 1].md;
 }
 
+function editionParam(url, body) {
+  const e = body?.edition || url.searchParams.get("edition") || "original";
+  return String(e).toLowerCase();
+}
+
+// Markdown for one edition: original draft_body, or a post_translations entry.
+function editionMarkdown(draft, edition) {
+  if (!edition || edition === "original") return draftToMarkdown(draft);
+  const t = (draft.post_translations || []).find((x) => String(x.language).toLowerCase() === edition);
+  if (!t) throw new Error(`no ${edition} edition on this post`);
+  let doc;
+  try {
+    doc = typeof t.draft_body === "string" ? JSON.parse(t.draft_body) : t.draft_body;
+  } catch {
+    throw new Error(`${edition} edition body is not valid JSON`);
+  }
+  const meta = {
+    title: t.draft_title || "",
+    subtitle: t.draft_subtitle || "",
+    id: draft.id,
+    edition: "translation",
+    language: t.language,
+    audience: draft.audience || "everyone",
+    publication_id: draft.publication_id,
+  };
+  for (const k of Object.keys(meta)) if (meta[k] == null || meta[k] === "") delete meta[k];
+  return stringifyFrontmatter(meta) + tiptapToMarkdown(doc);
+}
+
+function blankEdStore(md) {
+  const now = new Date().toISOString();
+  return {
+    versions: [{ n: 0, md, note: "original from Substack", createdAt: now }],
+    suggestions: [],
+    pushes: [],
+    lastSeen: md,
+    mode: "none",
+  };
+}
+
+// Migrate flat pre-edition stores ({versions,…}) into {editions:{original:…}}.
+function migrateStore(store) {
+  if (store.editions) {
+    // collapse legacy duplicate-content push versions inside each edition
+    for (const ed of Object.values(store.editions)) {
+      ed.pushes = ed.pushes || [];
+      while (ed.versions.length > 1) {
+        const last = ed.versions[ed.versions.length - 1];
+        const m = /^pushed v(\d+) to Substack \((republished live|draft only)\)$/.exec(last.note || "");
+        const target = m && ed.versions.find((x) => x.n === Number(m[1]));
+        if (!m || !target || target.md !== last.md) break;
+        ed.pushes.push({ version: target.n, republished: m[2] === "republished live", at: last.createdAt });
+        ed.versions.pop();
+      }
+      if (ed.lastSeen === undefined) ed.lastSeen = latestMarkdown(ed);
+    }
+    return false;
+  }
+  const { versions, suggestions, pushes, lastSeen, mode } = store;
+  store.editions = {
+    original: { versions, suggestions: suggestions || [], pushes: pushes || [], lastSeen, mode: mode || "none" },
+  };
+  delete store.versions;
+  delete store.suggestions;
+  delete store.pushes;
+  delete store.lastSeen;
+  delete store.mode;
+  return true;
+}
+
+function edStore(store, edition, md) {
+  if (!store.editions[edition]) store.editions[edition] = blankEdStore(md);
+  return store.editions[edition];
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://localhost");
@@ -139,84 +214,83 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // get one draft -> markdown + versions
+    // get one draft -> markdown + versions (per edition)
     const mGet = url.pathname.match(/^\/api\/posts\/(\d+)$/);
     if (req.method === "GET" && mGet) {
       const sid = sidFrom(req);
       const pub = pubFrom(req, null, url.searchParams);
       if (!sid) return send(res, 401, { error: "missing SID" });
       const id = mGet[1];
+      const edition = editionParam(url);
       const draft = await getDraft({ sid, publicationUrl: pub, id });
-      const md = draftToMarkdown(draft);
+      const translations = (draft.post_translations || []).map((t) => ({ language: String(t.language).toLowerCase(), title: t.draft_title }));
+      if (edition !== "original" && !translations.some((t) => t.language === edition)) {
+        return send(res, 404, { error: `no ${edition} edition on this post` });
+      }
+      const md = editionMarkdown(draft, edition);
+      const ed = translations.find((t) => t.language === edition);
       let store = loadStore(id);
       if (!store) {
-        store = {
-          id: Number(id),
-          title: draft.draft_title || draft.title,
-          versions: [{ n: 0, md, note: "original from Substack", createdAt: new Date().toISOString() }],
-          suggestions: [],
-          pushes: [],
-          lastSeen: md,
-          mode: "none",
-        };
+        store = { id: Number(id), title: draft.draft_title || draft.title, editions: {} };
+        store.editions[edition] = blankEdStore(md);
         saveStore(id, store);
       } else {
+        let dirty = migrateStore(store);
+        const isNewEdition = !store.editions[edition];
+        const es = edStore(store, edition, md);
+        if (isNewEdition) dirty = true;
         // Refresh: Substack may have been edited externally (editor, app).
-        // lastSeen tracks the Substack content as of our last check.
-        store.pushes = store.pushes || [];
-        // one-time migration: old code logged each push as a duplicate-content
-        // version ("pushed vN …"). Collapse those into push markers instead.
-        while (store.versions.length > 1) {
-          const last = store.versions[store.versions.length - 1];
-          const m = /^pushed v(\d+) to Substack \((republished live|draft only)\)$/.exec(last.note || "");
-          const target = m && store.versions.find((x) => x.n === Number(m[1]));
-          if (!m || !target || target.md !== last.md) break;
-          store.pushes.push({ version: target.n, republished: m[2] === "republished live", at: last.createdAt });
-          store.versions.pop();
-        }
-        if (store.lastSeen === undefined) store.lastSeen = latestMarkdown(store);
-        store.title = draft.draft_title || draft.title;
-        if (md !== store.lastSeen) {
-          if (md === latestMarkdown(store) || store.versions.some((v) => v.md === md)) {
-            store.lastSeen = md; // caught up with a known version (e.g. our own push)
-            saveStore(id, store);
+        if (md !== es.lastSeen) {
+          if (md === latestMarkdown(es) || es.versions.some((v) => v.md === md)) {
+            es.lastSeen = md; // caught up with a known version (e.g. our own push)
+            dirty = true;
           } else {
-            store.versions.push({
-              n: store.versions.length,
+            es.versions.push({
+              n: es.versions.length,
               md,
               note: "synced from Substack (edited externally)",
               createdAt: new Date().toISOString(),
             });
-            store.suggestions = []; // computed against older text — re-proofread
-            store.lastSeen = md;
-            saveStore(id, store);
+            es.suggestions = []; // computed against older text — re-proofread
+            es.lastSeen = md;
+            dirty = true;
           }
         }
+        store.title = draft.draft_title || draft.title;
+        if (dirty) saveStore(id, store);
       }
+      const es = store.editions[edition];
       return send(res, 200, {
         id,
-        title: draft.draft_title || draft.title,
+        edition,
+        language: edition === "original" ? draft.language || null : edition,
+        title: edition === "original" ? draft.draft_title || draft.title : ed?.title,
         subtitle: draft.draft_subtitle,
-        translations: (draft.post_translations || []).map((t) => ({ language: t.language, title: t.draft_title })),
-        store,
+        isPublished: !!draft.is_published,
+        translations,
+        store: es,
       });
     }
 
-    // proofread latest version
+    // proofread latest version (per edition, in that edition's language)
     const mProof = url.pathname.match(/^\/api\/posts\/(\d+)\/proofread$/);
     if (req.method === "POST" && mProof) {
+      const body = await readJson(req);
       const id = mProof[1];
+      const edition = editionParam(url, body);
       const store = loadStore(id);
-      if (!store) return send(res, 404, { error: "open the post first (GET /api/posts/:id)" });
-      const md = latestMarkdown(store);
+      const es = store?.editions?.[edition];
+      if (!es) return send(res, 404, { error: "open the post edition first (GET /api/posts/:id?edition=…)" });
+      const md = latestMarkdown(es);
       const { suggestions, mode } = await proofreadMarkdown(md, {
         apiKey: process.env.GROQ_API_KEY,
         model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+        language: body.language || (edition === "original" ? null : edition),
       });
-      store.suggestions = suggestions;
-      store.mode = mode;
+      es.suggestions = suggestions;
+      es.mode = mode;
       saveStore(id, store);
-      return send(res, 200, { suggestions, mode, baseVersion: store.versions.length - 1 });
+      return send(res, 200, { suggestions, mode, baseVersion: es.versions.length - 1 });
     }
 
     // apply accepted suggestions -> new version
@@ -224,24 +298,28 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && mApply) {
       const body = await readJson(req);
       const id = mApply[1];
+      const edition = editionParam(url, body);
       const store = loadStore(id);
-      if (!store) return send(res, 404, { error: "no store" });
+      const es = store?.editions?.[edition];
+      if (!es) return send(res, 404, { error: "no store" });
       const acceptedIds = new Set(body.acceptedIds || []);
-      const accepted = store.suggestions.filter((s) => acceptedIds.has(s.id));
+      const accepted = es.suggestions.filter((s) => acceptedIds.has(s.id));
       if (!accepted.length) return send(res, 400, { error: "no suggestions accepted" });
-      const md = latestMarkdown(store);
+      const md = latestMarkdown(es);
       const next = applySuggestions(md, accepted);
-      store.versions.push({
-        n: store.versions.length,
+      es.versions.push({
+        n: es.versions.length,
         md: next,
-        note: `applied ${accepted.length}/${store.suggestions.length} (${store.mode})`,
+        note: `applied ${accepted.length}/${es.suggestions.length} (${es.mode})`,
         createdAt: new Date().toISOString(),
       });
       saveStore(id, store);
-      return send(res, 200, { store });
+      return send(res, 200, { store: es });
     }
 
-    // push a version to Substack (explicit only)
+    // push a version to Substack (explicit only).
+    // Original -> updateDraft (translations untouched). Translation edition ->
+    // translateDraft (Substack only allows this on unpublished drafts).
     const mPush = url.pathname.match(/^\/api\/posts\/(\d+)\/push$/);
     if (req.method === "POST" && mPush) {
       const body = await readJson(req);
@@ -250,38 +328,56 @@ const server = http.createServer(async (req, res) => {
       if (!sid) return send(res, 401, { error: "missing SID" });
       if (!pub) return send(res, 409, { error: "missing pub — pick a publication first" });
       const id = mPush[1];
+      const edition = editionParam(url, body);
       const store = loadStore(id);
-      if (!store) return send(res, 404, { error: "no store" });
-      const v = body.version ?? store.versions.length - 1;
-      const target = store.versions.find((x) => x.n === Number(v));
+      const es = store?.editions?.[edition];
+      if (!es) return send(res, 404, { error: "no store" });
+      const v = body.version ?? es.versions.length - 1;
+      const target = es.versions.find((x) => x.n === Number(v));
       if (!target) return send(res, 404, { error: "version not found" });
-      // draftToMarkdown emits frontmatter (title/subtitle/audience/id) — strip it
-      // before mdToTiptap, otherwise it becomes visible ---/text in the post.
-      // NOTE: PUT carries no `translations` field, so other language editions
-      // are left untouched (verified live: EN edition survived updateDraft).
+      // frontmatter is transport only — strip it before mdToTiptap, otherwise
+      // it becomes visible ---/text in the post.
       const { data: fm, body: cleanMd } = parseFrontmatter(target.md);
-      const result = await updateDraft({
-        sid, publicationUrl: pub, id,
-        markdown: cleanMd,
-        title: fm.title || undefined,
-        subtitle: fm.subtitle != null ? String(fm.subtitle) : undefined,
-        audience: fm.audience ? String(fm.audience) : undefined,
-        baseDir: ".",
-      });
+      let draft_updated_at = null;
       let republished = false;
-      // Published posts: updateDraft alone only edits the draft copy — live page
-      // stays unchanged until republish. Require explicit opt-in (checkbox in UI).
-      if (body.republish) {
-        await publishDraft({ sid, publicationUrl: pub, id, send: false, shareAutomatically: false });
-        republished = true;
+      if (!edition || edition === "original") {
+        // NOTE: PUT carries no `translations` field, so other language editions
+        // are left untouched (verified live: EN edition survived updateDraft).
+        const result = await updateDraft({
+          sid, publicationUrl: pub, id,
+          markdown: cleanMd,
+          title: fm.title || undefined,
+          subtitle: fm.subtitle != null ? String(fm.subtitle) : undefined,
+          audience: fm.audience ? String(fm.audience) : undefined,
+          baseDir: ".",
+        });
+        draft_updated_at = result.draft_updated_at;
+        // Published posts: updateDraft alone only edits the draft copy — live page
+        // stays unchanged until republish. Require explicit opt-in (checkbox in UI).
+        if (body.republish) {
+          await publishDraft({ sid, publicationUrl: pub, id, send: false, shareAutomatically: false });
+          republished = true;
+        }
+      } else {
+        try {
+          await translateDraft({
+            sid, publicationUrl: pub, id, language: edition,
+            markdown: cleanMd,
+            title: fm.title || undefined,
+            subtitle: fm.subtitle != null ? String(fm.subtitle) : undefined,
+            baseDir: ".",
+          });
+        } catch (e) {
+          return send(res, 400, { error: `translation push failed: ${String(e.message).slice(0, 300)}` });
+        }
       }
       // Record the push ON the version, not as a new version: versions are
       // content states (v0, v1, …), pushes are events pointing at them.
-      store.pushes = store.pushes || [];
-      store.pushes.push({ version: target.n, republished, at: new Date().toISOString() });
-      store.lastSeen = target.md; // Substack now holds this content
+      es.pushes = es.pushes || [];
+      es.pushes.push({ version: target.n, republished, at: new Date().toISOString() });
+      es.lastSeen = target.md; // Substack now holds this content
       saveStore(id, store);
-      return send(res, 200, { ok: true, pushedVersion: target.n, republished, draft_updated_at: result.draft_updated_at });
+      return send(res, 200, { ok: true, pushedVersion: target.n, republished, draft_updated_at });
     }
 
     // rewind: duplicate an old version as new head (does NOT push until /push)
@@ -289,18 +385,20 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && mRewind) {
       const body = await readJson(req);
       const id = mRewind[1];
+      const edition = editionParam(url, body);
       const store = loadStore(id);
-      if (!store) return send(res, 404, { error: "no store" });
-      const target = store.versions.find((x) => x.n === Number(body.version));
+      const es = store?.editions?.[edition];
+      if (!es) return send(res, 404, { error: "no store" });
+      const target = es.versions.find((x) => x.n === Number(body.version));
       if (!target) return send(res, 404, { error: "version not found" });
-      store.versions.push({
-        n: store.versions.length,
+      es.versions.push({
+        n: es.versions.length,
         md: target.md,
         note: `rewind to v${target.n}`,
         createdAt: new Date().toISOString(),
       });
       saveStore(id, store);
-      return send(res, 200, { store });
+      return send(res, 200, { store: es });
     }
 
     return send(res, 404, { error: "not found" });

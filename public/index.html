@@ -48,17 +48,26 @@ button.accent{background:var(--accent);border-color:var(--accent)}
 .doc pre code{background:none;padding:0}
 .doc hr{border:none;border-top:1px solid var(--line);margin:1.2em 0}
 .doc img{max-width:100%;border-radius:8px}
+.diff{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:8px;font-size:14px;line-height:1.65;background:#fff}
+.dold,.dnew{padding:6px 10px;display:flex;gap:8px;word-break:break-word}
+.dold{background:#fef2f2}
+.dnew{background:#f0fdf4;border-top:1px solid var(--line)}
+.sign{font-family:ui-monospace,SFMono-Regular,monospace;opacity:.45;user-select:none;flex:none}
+.hl-old{background:#fecaca;border-radius:3px;padding:0 2px;font-weight:700}
+.hl-new{background:#bbf7d0;border-radius:3px;padding:0 2px;font-weight:700}
+.sug{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;font-family:system-ui;font-size:14px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.sug.off{opacity:.55}
+.sughead{display:flex;gap:10px;align-items:center;cursor:pointer;font-size:13px;color:var(--muted)}
+.sughead input{margin:0}
+button{transition:filter .15s}
+button:hover:not(:disabled){filter:brightness(1.12)}
+.postitem{transition:border-color .15s,background .15s}
+.hunkhead{font-family:system-ui;font-size:12px;color:var(--muted);margin:14px 0 2px}
+.hunkhead:first-child{margin-top:0}
 .media{font-family:system-ui;font-size:13px;background:#f5f5f4;border:1px dashed #a8a29e;border-radius:8px;padding:8px 12px;margin:.7em 0;color:#57534e}
 .media strong{color:var(--ink)}
 .media .mtag{font-size:11px;background:#e7e5e4;border-radius:999px;padding:1px 8px;margin-right:8px;white-space:nowrap}
 .meta{font-family:system-ui;font-size:13px;color:var(--muted);background:#f5f5f4;border-radius:8px;padding:8px 12px;margin-bottom:10px}
-.sug{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;font-family:system-ui;font-size:14px}
-.sug.off{opacity:.5}
-.sug label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
-.sug input{margin-top:3px}
-.sug .pair{line-height:1.6}
-.sug .o{background:var(--red-bg);color:var(--red);text-decoration:line-through;border-radius:4px;padding:1px 5px}
-.sug .n{background:var(--green-bg);color:var(--green);font-weight:600;border-radius:4px;padding:1px 5px}
 .tag{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted);margin-left:8px;white-space:nowrap}
 .ver{display:flex;gap:8px;align-items:center;font-family:system-ui;font-size:13px;padding:6px 0;border-bottom:1px dashed var(--line)}
 .ver:last-child{border-bottom:none}
@@ -100,11 +109,12 @@ label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-item
 
   <section class="card" id="work" style="display:none">
     <h2><span class="step">3</span><span id="wtitle">Review</span></h2>
+    <div class="tabs" id="edtabs" style="display:none"></div>
     <div id="docmeta" class="meta"></div>
     <div class="tabs">
       <button id="tabRead" class="ghost">Rendered</button>
       <button id="tabRaw" class="ghost">Raw markdown</button>
-      <button id="tabPrev" class="ghost">Preview with checked fixes</button>
+      <button id="tabPrev" class="ghost">Preview diff</button>
     </div>
     <div id="doc" class="doc"></div>
     <pre id="raw" class="raw" style="display:none"></pre>
@@ -130,6 +140,7 @@ label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-item
     <div class="footer-actions">
       <button id="push">Push latest version to draft</button>
       <label class="check"><input type="checkbox" id="republish" /> Republish live <span class="hint">(published posts only · updates public page, no email)</span></label>
+      <span id="pushhint" class="hint"></span>
     </div>
     <p class="hint">Nothing touches Substack until you press Push. Rewind below restores any earlier version locally first.</p>
     <h2 style="margin-top:16px"><span class="step">↺</span>Version history</h2>
@@ -142,6 +153,8 @@ const $ = id => document.getElementById(id);
 const statusEl = $('status'), errEl = $('err');
 const pubEl = $('pub');
 let currentId = null, store = null, tab = 'read';
+let currentEdition = 'original', currentLang = null, currentIsPublished = false, currentTranslations = [];
+function EQ() { return `?edition=${encodeURIComponent(currentEdition)}`; }
 
 function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = 'pill' + (cls ? ' ' + cls : ''); }
 function showErr(m) { errEl.style.display = 'block'; errEl.textContent = m; setStatus('error', 'err'); }
@@ -259,18 +272,42 @@ function splitFm(md) {
   return { meta, body: m[2] };
 }
 
-/* --- client-side preview: same rules as server applySuggestions --- */
-function previewApply(md, suggestions) {
-  let out = md;
-  for (const s of suggestions) {
-    if (s.original === '  (double space)') { out = out.replace(/[^ ]  +[^ ]/g, m => m.replace(/  +/g, ' ')); continue; }
-    const idx = out.indexOf(s.original);
-    if (idx !== -1) out = out.slice(0, idx) + s.replacement + out.slice(idx + s.original.length);
-  }
-  return out;
+/* --- git-like diffs: each fix shown as -old line / +new line with the
+   changed term highlighted. Operates on raw lines so what you see is
+   exactly what apply writes. */
+function emphLine(line, needle, cls) {
+  const i = line.indexOf(needle);
+  if (i === -1 || !needle) return esc(line);
+  return esc(line.slice(0, i)) + `<span class="${cls}">${esc(needle)}</span>` + esc(line.slice(i + needle.length));
 }
-function checkedSuggestions() {
-  return (store.suggestions || []).filter(s => document.querySelector(`input[data-s="${s.id}"]`)?.checked);
+function diffHunk(md, s) {
+  const lines = String(md).split('\n');
+  if (s.original === '  (double space)') {
+    const line = lines.find(l => /[^ ]  +[^ ]/.test(l)) || '';
+    const run = (line.match(/  +/) || [''])[0];
+    const nl = line.replace(/  +/g, ' ');
+    return { old: line, nl, oldHtml: emphLine(line, run, 'hl-old'), newHtml: emphLine(nl, ' ', 'hl-new') };
+  }
+  const line = lines.find(l => l.includes(s.original)) ?? s.original;
+  const nl = line.includes(s.original) ? line.replace(s.original, s.replacement) : s.replacement;
+  return { old: line, nl, oldHtml: emphLine(line, s.original, 'hl-old'), newHtml: emphLine(nl, s.replacement, 'hl-new') };
+}
+function diffBlock(h, reason, idx) {
+  return `${idx != null ? `<div class="hunkhead">fix ${idx}${reason ? ` · ${esc(reason)}` : ''}</div>` : ''}` +
+    `<div class="diff"><div class="dold"><span class="sign">−</span><span>${h.oldHtml}</span></div>` +
+    `<div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div></div>`;
+}
+/* Preview walk: same order + same first-occurrence rules as the server apply. */
+function previewHunks(md, suggestions) {
+  let cur = md;
+  const out = [];
+  suggestions.forEach((s, k) => {
+    const h = diffHunk(cur, s);
+    out.push(diffBlock(h, s.reason, k + 1));
+    if (s.original === '  (double space)') cur = cur.replace(/[^ ]  +[^ ]/g, m => m.replace(/  +/g, ' '));
+    else { const i = cur.indexOf(s.original); if (i !== -1) cur = cur.slice(0, i) + s.replacement + cur.slice(i + s.original.length); }
+  });
+  return out.join('');
 }
 
 /* --- flow --- */
@@ -311,53 +348,82 @@ function renderPostLists() {
   const match = p => !f || (p.title || '').toLowerCase().includes(f);
   $('drafts').innerHTML = allPosts.drafts.filter(match).map(postBtn).join('') || '<span class="hint">(none)</span>';
   $('pubd').innerHTML = allPosts.published.filter(match).map(postBtn).join('') || '<span class="hint">(none)</span>';
-  document.querySelectorAll('.postitem').forEach(b => b.onclick = () => openPost(Number(b.dataset.id)));
+  document.querySelectorAll('.postitem').forEach(b => b.onclick = () => openPost(Number(b.dataset.id), 'original'));
 }
 
-async function openPost(id) {
-  clearErr(); currentId = id; setStatus('opening…', 'busy');
+async function openPost(id, edition) {
+  clearErr(); currentId = id;
+  if (edition) currentEdition = edition;
+  setStatus('opening…', 'busy');
   try {
-    const r = await fetch(`/api/posts/${id}`, { headers: H() });
+    const r = await fetch(`/api/posts/${id}${EQ()}`, { headers: H() });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     store = j.store;
+    currentLang = j.language; currentIsPublished = !!j.isPublished; currentTranslations = j.translations || [];
     $('work').style.display = '';
-    $('wtitle').textContent = ' ' + (j.title || '#' + id);
-    window._translations = j.translations || [];
-    renderPostLists(); renderDoc(); renderVersions();
+    $('wtitle').textContent = ` ${j.title || '#' + id}`;
+    renderPostLists(); renderEdTabs(); renderDoc(); renderVersions();
     if (store.suggestions?.length) { $('sugCard').style.display = ''; renderSugs(); }
     else { $('sugCard').style.display = 'none'; $('sugs').innerHTML = ''; $('count').textContent = ''; }
     // nothing to send back until a fix was applied (v0 is identical to Substack)
     $('pushCard').style.display = store.versions.length > 1 ? '' : 'none';
+    updatePushState();
     setStatus('ready');
   } catch (e) { showErr(e.message); }
+}
+
+function renderEdTabs() {
+  const box = $('edtabs');
+  if (!currentTranslations.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  const btn = (ed, label) => `<button class="${ed === currentEdition ? '' : 'ghost'}" data-ed="${ed}">${label}</button>`;
+  box.innerHTML = btn('original', 'Original') + currentTranslations.map(t => btn(t.language, t.language.toUpperCase())).join('');
+  box.querySelectorAll('button').forEach(b => b.onclick = () => openPost(currentId, b.dataset.ed));
+}
+
+function updatePushState() {
+  // Substack only allows translation edits on unpublished drafts
+  const locked = currentEdition !== 'original' && currentIsPublished;
+  $('push').disabled = locked;
+  $('push').textContent = currentEdition === 'original' ? 'Push latest version to draft' : `Push latest version to ${currentEdition.toUpperCase()} edition`;
+  let hint = $('pushhint');
+  if (!hint) return;
+  hint.textContent = locked ? 'Locked: Substack does not allow editing translations of published posts.' : '';
 }
 
 function currentBody() { return splitFm(store.versions[store.versions.length - 1].md); }
 function renderDoc() {
   const { meta, body } = currentBody();
-  const tr = (window._translations || []).map(t => t.language.toUpperCase()).join(', ');
   $('docmeta').textContent = [meta.title && ('Title: ' + meta.title), meta.subtitle && ('Subtitle: ' + meta.subtitle), meta.audience && ('Audience: ' + meta.audience)].filter(Boolean).join('  ·  ') || ('Version v' + (store.versions.length - 1));
-  if (tr) $('docmeta').textContent += `  ·  Also in ${tr} (editions preserved, not proofread)`;
+  $('docmeta').textContent += `  ·  Edition: ${currentEdition === 'original' ? 'Original' + (currentLang ? ` (${currentLang})` : '') : currentEdition.toUpperCase()}`;
   const latest = store.versions[store.versions.length - 1];
   $('mode').textContent = `v${latest.n} · ${latest.note} · engine: ${store.mode}`;
   $('raw').textContent = latest.md;
   if (tab === 'raw') { $('doc').style.display = 'none'; $('raw').style.display = ''; }
+  else if (tab === 'prev') {
+    $('doc').style.display = ''; $('raw').style.display = 'none';
+    const checked = checkedSuggestions();
+    $('doc').innerHTML = checked.length
+      ? previewHunks(latest.md, checked)
+      : '<p class="hint">Check fixes in section 4 to preview the diff here.</p>';
+  }
   else {
     $('doc').style.display = ''; $('raw').style.display = 'none';
-    const src = tab === 'prev' ? splitFm(previewApply(latest.md, checkedSuggestions())).body : body;
-    $('doc').innerHTML = renderMarkdown(src);
+    $('doc').innerHTML = renderMarkdown(body);
   }
 }
 
 function renderSugs() {
   const sugs = store.suggestions || [];
+  const md = store.versions[store.versions.length - 1].md;
   $('count').textContent = sugs.length ? `${sugs.length} suggestion${sugs.length > 1 ? 's' : ''} · engine ${store.mode}` : '';
-  $('sugs').innerHTML = sugs.map(s => `
+  $('sugs').innerHTML = sugs.map((s, k) => `
     <div class="sug" data-wrap="${s.id}">
-      <label><input type="checkbox" data-s="${s.id}" checked />
-      <span class="pair"><span class="o">${esc(s.original)}</span> → <span class="n">${esc(s.replacement)}</span><span class="tag">${esc(s.reason)}</span></span>
+      <label class="sughead"><input type="checkbox" data-s="${s.id}" checked />
+      <span>fix ${k + 1}<span class="tag">${esc(s.reason)}</span></span>
       </label>
+      ${diffBlock(diffHunk(md, s))}
     </div>`).join('');
   document.querySelectorAll('#sugs input').forEach(c => c.onchange = () => {
     c.closest('.sug').classList.toggle('off', !c.checked);
@@ -376,7 +442,7 @@ function renderVersions() {
     if (!confirm(`Rewind to v${b.dataset.v}? Creates a new local version (Substack untouched).`)) return;
     busy(true);
     try {
-      const r = await fetch(`/api/posts/${currentId}/rewind`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ version: Number(b.dataset.v) }) });
+      const r = await fetch(`/api/posts/${currentId}/rewind${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ version: Number(b.dataset.v) }) });
       const j = await r.json(); if (j.error) throw new Error(j.error);
       store = j.store; renderDoc(); renderVersions(); setStatus('ready');
     } catch (e) { showErr(e.message); } finally { busy(false); }
@@ -392,7 +458,7 @@ $('tabPrev').onclick = () => { tab = 'prev'; renderDoc(); };
 $('proof').onclick = async () => {
   clearErr(); busy(true, $('proof'), 'Proofreading…');
   try {
-    const r = await fetch(`/api/posts/${currentId}/proofread`, { method: 'POST', headers: H() });
+    const r = await fetch(`/api/posts/${currentId}/proofread${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ language: currentLang }) });
     const j = await r.json(); if (j.error) throw new Error(j.error);
     store.suggestions = j.suggestions; store.mode = j.mode;
     $('sugCard').style.display = '';
@@ -403,7 +469,7 @@ $('proof').onclick = async () => {
 async function applyIds(ids) {
   clearErr(); busy(true);
   try {
-    const r = await fetch(`/api/posts/${currentId}/apply`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ acceptedIds: ids }) });
+    const r = await fetch(`/api/posts/${currentId}/apply${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ acceptedIds: ids }) });
     const j = await r.json(); if (j.error) throw new Error(j.error);
     await openPost(currentId);
   } catch (e) { showErr(e.message); busy(false); }
@@ -418,10 +484,10 @@ $('none').onclick = () => document.querySelectorAll('#sugs input').forEach(c => 
 
 $('push').onclick = async () => {
   const republish = $('republish').checked;
-  if (!confirm(republish ? 'Push + REPUBLISH live? Public page updates immediately (no email).' : 'Push latest version to the Substack draft?')) return;
+  if (!confirm(republish ? 'Push + REPUBLISH live? Public page updates immediately (no email).' : `Push latest version to the ${currentEdition === 'original' ? 'Substack draft' : currentEdition.toUpperCase() + ' edition'}?`)) return;
   clearErr(); busy(true, $('push'), 'Pushing…');
   try {
-    const r = await fetch(`/api/posts/${currentId}/push`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ republish }) });
+    const r = await fetch(`/api/posts/${currentId}/push${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ republish }) });
     const j = await r.json(); if (j.error) throw new Error(j.error);
     setStatus(`pushed v${j.pushedVersion}${j.republished ? ' + republished' : ''}`);
     await openPost(currentId);
