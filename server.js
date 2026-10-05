@@ -325,11 +325,25 @@ const server = http.createServer(async (req, res) => {
       const es = store?.editions?.[edition];
       if (!es) return send(res, 404, { error: "open the post edition first (GET /api/posts/:id?edition=…)" });
       const md = latestMarkdown(es);
-      const { suggestions, mode } = await proofreadMarkdown(md, {
-        apiKey: process.env.GROQ_API_KEY,
-        model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-        language: body.language || (edition === "original" ? null : edition),
-      });
+      let result;
+      try {
+        result = await proofreadMarkdown(md, {
+          apiKey: process.env.GROQ_API_KEY,
+          model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+          language: body.language || (edition === "original" ? null : edition),
+        });
+      } catch (e) {
+        // surface Groq rate limits as 429 (with retry hint) instead of generic 500
+        if (/Groq HTTP 429/.test(e.message)) {
+          const m = /try again in ([\d.]+)s/i.exec(e.message);
+          return send(res, 429, {
+            error: String(e.message).slice(0, 500),
+            retryInSec: m ? Math.max(1, Math.ceil(Number(m[1]))) : 10,
+          });
+        }
+        throw e;
+      }
+      const { suggestions, mode } = result;
       es.suggestions = suggestions;
       es.mode = mode;
       saveStore(id, store);

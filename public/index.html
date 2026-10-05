@@ -639,15 +639,37 @@ $('tabPend').onclick = () => { try { tab = 'pend'; renderDoc(); } catch (e) { sh
 $('tabComm').onclick = () => { try { tab = 'comm'; renderDoc(); } catch (e) { showErr('Preview failed: ' + e.message, 'err3'); } };
 
 $('proof').onclick = async () => {
-  clearErr(); busy(true, $('proof'), 'Proofreading…');
+  clearErr(); clearInterval(window._rt); busy(true, $('proof'), 'Proofreading…');
   try {
     const r = await fetch(`/api/posts/${currentId}/proofread${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ language: currentLang }) });
-    const j = await r.json(); if (j.error) throw new Error(j.error);
+    const j = await r.json();
+    if (r.status === 429) { groqRetry(j); return; }
+    if (j.error) throw new Error(j.error);
     store.suggestions = j.suggestions; store.mode = j.mode;
     $('sugCard').style.display = '';
     renderSugs(); renderDoc(); setStatus(j.suggestions.length ? `${j.suggestions.length} fixes proposed` : 'clean — no fixes');
   } catch (e) { showErr(e.message, 'err3'); } finally { busy(false, $('proof')); }
 };
+
+/* Groq rate limit: show the message with a Try-Again button on a countdown. */
+function groqRetry(j) {
+  busy(false, $('proof'));
+  setStatus('rate limited', 'err');
+  clearInterval(window._rt);
+  const box = $('err3');
+  box.style.display = 'block';
+  let left = Math.max(1, Math.ceil(Number(j.retryInSec) || 10));
+  const short = String(j.error || 'Rate limit reached.').replace(/\{.*$/, '').slice(0, 220);
+  const tick = () => {
+    box.innerHTML = `${esc(short)}<br/><br/><button id="retryBtn"${left > 0 ? ' disabled' : ''}>${left > 0 ? `Try again in ${left}s` : 'Try again now'}</button>`;
+    const b = $('retryBtn');
+    if (b && left <= 0) b.onclick = () => { clearInterval(window._rt); clearErr(); $('proof').click(); };
+    if (left <= 0) clearInterval(window._rt);
+    left--;
+  };
+  tick();
+  window._rt = setInterval(tick, 1000);
+}
 
 async function applyIds(ids) {
   clearErr(); busy(true);
