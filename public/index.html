@@ -325,6 +325,7 @@ async function openPost(id) {
     $('wtitle').textContent = ' ' + (j.title || '#' + id);
     renderPostLists(); renderDoc(); renderVersions();
     if (store.suggestions?.length) { $('sugCard').style.display = ''; renderSugs(); }
+    else { $('sugCard').style.display = 'none'; $('sugs').innerHTML = ''; $('count').textContent = ''; }
     setStatus('ready');
   } catch (e) { showErr(e.message); }
 }
