@@ -669,16 +669,24 @@ async function analyzeInBackground() {
   const cur = S.cur;
   cur.sugState = 'working';
   $('h-advance').disabled = true;
-  $('h-status').textContent = 'Enviando versão atual para análise…';
+  $('h-status').textContent = 'Enviando versão atual para análise… (textos longos vão em partes, pode levar um minuto)';
   try {
     const r = await fetch(`/api/posts/${cur.id}/proofread?edition=${encodeURIComponent(cur.edition)}`,
       { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ language: cur.lang }) });
     const j = await r.json();
     if (cur !== S.cur) return; // usuário trocou de texto no meio
     if (r.status === 429) {
+      // Rate limit: espera automática — clicar de novo só reinicia o bloqueio.
       cur.sugState = 'rate';
-      $('h-status').innerHTML = `Limite da IA atingido. <button id="h-retry" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-stone-200 hover:bg-stone-300 dark:bg-stone-800 dark:hover:bg-stone-700 dark:text-stone-100">Tentar de novo</button>`;
-      $('h-retry').onclick = analyzeInBackground;
+      let wait = (j && j.retryInSec) || 10;
+      const tick = () => {
+        if (cur !== S.cur) return;
+        if (wait <= 0) { analyzeInBackground(); return; }
+        $('h-status').textContent = `Limite da IA atingido — tentando de novo em ${wait}s (não clique, a espera é automática)…`;
+        wait--;
+        setTimeout(tick, 1000);
+      };
+      tick();
       return;
     }
     if (j.error) throw new Error(j.error);
