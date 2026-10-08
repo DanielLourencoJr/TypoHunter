@@ -18,9 +18,13 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
 ## Credentials (never print, never commit)
 
 - `.env` (gitignored) holds `SUBSTACK_SID` + `GROQ_API_KEY` + `GROQ_MODEL=openai/gpt-oss-120b`.
+  `REVIEWER_SID` is the service (contributor-model) identity; central vault keeps
+  `SUBSTACK_SID_REVIEWER` + `SUBSTACK_USERID_REVIEWER` + `SUBSTACK_HANDLE_REVIEWER`.
   Experiments use the TEST account: `/mnt/HD/Junior/Projects/.substack.test.env`
   (pub `danielloureno.substack.com`). MAIN (`danielloureno1`) is LIVE — read-only
   probes only, and never echo secret values into tool output (they land in logs).
+- Fresh-account SIDs get HTTP 403 with non-browser User-Agents (python-urllib);
+  always validate with a browser UA or node fetch. A 403 alone means nothing.
 - The user runs their own server on :5179. Test on other ports (`PORT=51xx`).
   Find strays with `ss -ltnp | grep <port>` + `kill <pid>` (`pkill` hangs here).
   Beware `A && B &` precedence — background the server in its own command and
