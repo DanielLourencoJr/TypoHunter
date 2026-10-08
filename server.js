@@ -340,9 +340,10 @@ const server = http.createServer(async (req, res) => {
         else return send(res, 409, { error: "multiple publications — pick one", pubs });
       }
       const limit = Number(url.searchParams.get("limit") || 20);
+      const offset = Number(url.searchParams.get("offset") || 0);
       const [d, p] = await Promise.all([
-        listDrafts({ sid, publicationUrl: pub, limit }),
-        listPublished({ sid, publicationUrl: pub, limit }),
+        listDrafts({ sid, publicationUrl: pub, limit, offset }),
+        listPublished({ sid, publicationUrl: pub, limit, offset }),
       ]);
       const item = (x, published) => ({
         id: x.id,
@@ -364,6 +365,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, {
         drafts: (d.posts || []).map((x) => item(x, x.is_published)),
         published: (p.posts || []).map((x) => item(x, true)),
+        totals: { drafts: d.total ?? null, published: p.total ?? null },
       });
     }
 

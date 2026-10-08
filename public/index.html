@@ -50,6 +50,7 @@ body.bare{padding:0}
 .pill.err{background:var(--red-bg);color:var(--red);border-color:var(--line)}
 main{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 main.narrow{max-width:760px}
+main.centered{justify-content:center;min-height:82vh}
 .view{display:none}
 .view.on{display:flex;flex-direction:column;gap:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
@@ -137,6 +138,7 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
 </head>
 <body>
 <div class="topbar" id="topbar" style="display:none">
+  <button id="back" class="secondary" style="display:none">← Voltar</button>
   <h1>Revisor de Rascunhos <small>para Substack · só corrige typos, nunca sua voz</small></h1>
   <span id="status" class="pill">pronto</span>
   <span class="spacer"></span>
@@ -205,6 +207,10 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
       <div id="drafts" class="libgrid"></div>
       <h3 style="font-family:var(--font-ui);font-size:13px;color:var(--muted);margin-top:14px">Publicados</h3>
       <div id="pubd" class="libgrid"></div>
+      <div class="row" style="margin-top:12px">
+        <button id="more" class="secondary" style="display:none">Mostrar mais</button>
+        <span id="lib-count" class="hint"></span>
+      </div>
       <div class="err" id="err-lib"></div>
     </div>
   </section>
@@ -286,14 +292,29 @@ function clearErrs() { document.querySelectorAll('.err').forEach(e => { e.style.
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function H() { const h = {}; if (S.pub) { h['x-pub'] = S.pub; localStorage.setItem('sdr_pub', S.pub); } return h; }
 function EQ() { return `?edition=${encodeURIComponent((S.cur && S.cur.edition) || 'original')}`; }
-function showView(name) {
+function showView(name, push) {
+  if (push !== false && CUR && CUR !== name) NAV.push(CUR);
+  CUR = name;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
   $('v-' + name).classList.add('on');
   $('topbar').style.display = '';
   $('main').style.display = '';
-  $('main').classList.toggle('narrow', ['profile', 'tutorial', 'dash', 'done'].includes(name));
+  const narrow = ['profile', 'tutorial', 'dash', 'done'];
+  $('main').classList.toggle('narrow', narrow.includes(name));
+  $('main').classList.toggle('centered', narrow.includes(name));
+  $('back').style.display = NAV.length ? '' : 'none';
   window.scrollTo(0, 0);
 }
+function goBack() {
+  const prev = NAV.pop();
+  if (!prev) return;
+  CUR = null; // evita re-empilhar
+  if (prev === 'dash') showDash();
+  else showView(prev, false);
+}
+let CUR = null;
+const NAV = [];
+$('back').onclick = goBack;
 
 /* ---------- markdown renderer (headings, quotes, lists, code, media chips) ---------- */
 const OPAQUE_RE = /<!--\s*substack-cli-(node|inline):v1\s+([A-Za-z0-9_-]+)\s*-->/g;
@@ -536,29 +557,52 @@ function libCard(p) {
   return `<button class="libcard" data-id="${p.id}">${cover}<div class="pad"><h4>${esc(p.title || '(sem título)')}</h4>` +
     `<small>${fmtDate(p.date)}${p.slug ? ' · /' + esc(p.slug) : ''}</small>${stats}</div></button>`;
 }
+const PAGE = 20;
 async function loadLibrary() {
   clearErrs(); setStatus('carregando textos…', 'busy');
+  S.postsOffset = 0;
   try {
-    const r = await fetch('/api/posts?limit=30', { headers: H() });
+    const r = await fetch(`/api/posts?limit=${PAGE}&offset=0`, { headers: H() });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     S.posts = j;
-    const f = ($('filter').value || '').toLowerCase();
-    const match = p => !f || (p.title || '').toLowerCase().includes(f);
-    $('drafts').innerHTML = j.drafts.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
-    $('pubd').innerHTML = j.published.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
-    document.querySelectorAll('.libcard').forEach(b => b.onclick = () => openHistory(Number(b.dataset.id)));
+    renderLibrary();
     setStatus('pronto');
   } catch (e) { showErr(e.message, 'err-lib'); }
 }
-$('filter').oninput = () => {
-  if (!S.posts) return;
+function renderLibrary() {
+  const j = S.posts;
   const f = ($('filter').value || '').toLowerCase();
   const match = p => !f || (p.title || '').toLowerCase().includes(f);
-  $('drafts').innerHTML = S.posts.drafts.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
-  $('pubd').innerHTML = S.posts.published.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
+  $('drafts').innerHTML = j.drafts.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
+  $('pubd').innerHTML = j.published.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
   document.querySelectorAll('.libcard').forEach(b => b.onclick = () => openHistory(Number(b.dataset.id)));
+  const t = j.totals || {};
+  const td = t.drafts, tp = t.published;
+  $('lib-count').textContent = [
+    td != null ? `${j.drafts.length} de ${td} rascunhos` : `${j.drafts.length} rascunhos`,
+    tp != null ? `${j.published.length} de ${tp} publicados` : `${j.published.length} publicados`,
+  ].join(' · ');
+  const moreD = td == null ? j.drafts.length - S.postsOffset >= PAGE : j.drafts.length < td;
+  const moreP = tp == null ? j.published.length - S.postsOffset >= PAGE : j.published.length < tp;
+  $('more').style.display = (moreD || moreP) ? '' : 'none';
+}
+$('more').onclick = async () => {
+  const btn = $('more');
+  btn.disabled = true;
+  try {
+    S.postsOffset += PAGE;
+    const r = await fetch(`/api/posts?limit=${PAGE}&offset=${S.postsOffset}`, { headers: H() });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    S.posts.drafts.push(...(j.drafts || []));
+    S.posts.published.push(...(j.published || []));
+    S.posts.totals = j.totals || S.posts.totals;
+    renderLibrary();
+  } catch (e) { showErr(e.message, 'err-lib'); S.postsOffset -= PAGE; }
+  finally { btn.disabled = false; }
 };
+$('filter').oninput = () => { if (S.posts) renderLibrary(); };
 
 /* ---------- histórico + análise em segundo plano ---------- */
 function originOf(v) {
