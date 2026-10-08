@@ -677,21 +677,24 @@ function renderReview(scroll) {
       if (s.original === '  (double space)') cur = cur.replace(/[^ ]  +[^ ]/g, m => m.replace(/  +/g, ' '));
       else { const i = cur.indexOf(s.original); if (i !== -1) cur = cur.slice(0, i) + s.replacement + cur.slice(i + s.original.length); }
       delta += spanNew - spanOrig;
-    } else {
-      placements.push({
-        line: eIdx - delta, span: spanOrig,
-        html: `<div class="rej">✗ mantida: “${esc(s.original.slice(0, 100))}” <span class="tag">rejeitada</span></div>`,
-      });
     }
+    // rejeitada: sem widget — o texto original flui normalmente (versão final)
   });
   let html = embedBlocks(body, placements);
   if (skipped.length) html += `<p class="hint">Correções ${skipped.join(', ')} fora do corpo do texto ou sobrepostas.</p>`;
+  const rej = sugs.filter(s => S.decisions[s.id] === 'n');
+  if (rej.length) {
+    html += `<details><summary class="hint">Rejeitadas (${rej.length}) — clique para reabrir alguma</summary>` +
+      rej.map(s => `<div class="rej">✗ “${esc(s.original.slice(0, 100))}” <button class="ghost" data-reopen="${s.id}">reabrir</button></div>`).join('') + `</details>`;
+  }
   $('rv-doc').innerHTML = html;
   const pend = sugs.filter(s => !S.decisions[s.id]).length;
   const acc = sugs.filter(s => S.decisions[s.id] === 'y').length;
-  $('rv-count').textContent = `${pend} pendentes · ${acc} aceitas de ${sugs.length}`;
+  const rejN = sugs.length - pend - acc;
+  $('rv-count').textContent = `${pend} pendentes · ${acc} aceitas · ${rejN} rejeitadas de ${sugs.length}`;
   document.querySelectorAll('[data-dec-y]').forEach(b => b.onclick = () => decide(b.dataset.decY, 'y'));
   document.querySelectorAll('[data-dec-n]').forEach(b => b.onclick = () => decide(b.dataset.decN, 'n'));
+  document.querySelectorAll('[data-reopen]').forEach(b => b.onclick = () => decide(b.dataset.reopen, null));
   updateTopButtons();
   if (scroll) {
     const next = document.querySelector('.sugwidget[data-pending="1"]');
@@ -707,7 +710,8 @@ function renderEdTabs2() {
   box.querySelectorAll('button').forEach(b => b.onclick = () => openHistory(S.cur.id, b.dataset.ed));
 }
 function decide(id, v) {
-  S.decisions[id] = v;
+  if (v == null) delete S.decisions[id];
+  else S.decisions[id] = v;
   renderReview(true);
 }
 function updateTopButtons() {
