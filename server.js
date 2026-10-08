@@ -278,14 +278,6 @@ const server = http.createServer(async (req, res) => {
       res.end(html);
       return;
     }
-    // vendored assets only (Pico CSS) — strict allowlist, no traversal
-    if (req.method === "GET" && url.pathname === "/vendor/pico.min.css") {
-      const css = fs.readFileSync(path.join(ROOT, "public", "vendor", "pico.min.css"), "utf8");
-      res.writeHead(200, { "Content-Type": "text/css", "Cache-Control": "public, max-age=86400" });
-      res.end(css);
-      return;
-    }
-
     // whoami + publications derived from SID (no need to save PUB)
     if (req.method === "GET" && url.pathname === "/api/me") {
       const sid = sidFrom(req);

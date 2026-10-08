@@ -48,12 +48,10 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
 
 ## Styling
 
-- Pico CSS v2 vendored at `public/vendor/pico.min.css` (no CDN — offline-first).
-  Served by an explicit allowlist route, not a general static handler.
-- Our `data-theme` attribute drives Pico's dark mode directly; brand primary
-  overridden via `--pico-primary-*` vars in both themes. Base buttons are Pico's
-  (no custom button rules); inputs, cards, diffs, widgets stay custom.
-  Fonts are system stacks only (`--font-text/ui/mono`), no webfonts.
+- Tailwind via Play CDN (no build) + inline `tailwind.config` (`darkMode` follows
+  our `data-theme` selector, brand orange, font stacks). Custom diff/media/widget
+  CSS stays in `public/index.html`; buttons/layout are Tailwind utilities.
+  App requires internet anyway (Substack + Groq), so CDN is acceptable here.
 
 ## Gotchas
 
