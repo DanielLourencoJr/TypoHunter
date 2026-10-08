@@ -669,7 +669,7 @@ async function analyzeInBackground() {
   const cur = S.cur;
   cur.sugState = 'working';
   $('h-advance').disabled = true;
-  $('h-status').textContent = 'Enviando versão atual para análise… (textos longos vão em partes, pode levar um minuto)';
+  $('h-status').textContent = 'Enviando versão atual para análise… (textos longos vão em partes e podem levar vários minutos — aguarde, a tela se atualiza sozinha)';
   try {
     const r = await fetch(`/api/posts/${cur.id}/proofread?edition=${encodeURIComponent(cur.edition)}`,
       { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ language: cur.lang }) });
