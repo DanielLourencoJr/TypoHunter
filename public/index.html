@@ -500,6 +500,7 @@ async function enterWithRef(ref) {
   try {
     const r = await fetch('/api/access?pub=' + encodeURIComponent(pub));
     const j = await r.json();
+    S.accessCheckedAs = j.checkedAs || '';
     if (j.hasAccess) showDash();
     else { showView('tutorial'); fillTutorial(pub); }
   } catch (e) { showErr('Falha ao verificar acesso: ' + e.message, 'err-prof'); showView('profile'); }
@@ -525,6 +526,7 @@ $('tut-check').onclick = async () => {
   try {
     const r = await fetch('/api/access?pub=' + encodeURIComponent(S.pub));
     const j = await r.json();
+    S.accessCheckedAs = j.checkedAs || '';
     if (j.hasAccess) showDash();
     else { $('tut-status').textContent = 'Ainda sem acesso. Se você já enviou o convite, ele está aguardando aceite do lado do revisor (verificamos de novo a cada tentativa). Confira o papel Contribuidor e tente de novo.'; }
   } catch (e) { showErr(e.message, 'err-tut'); }
@@ -539,12 +541,16 @@ async function showDash() {
   try {
     const r = await fetch('/api/posts?limit=1', { headers: H() });
     const j = await r.json();
-    if (!j.error) counts = `${(j.drafts || []).length}+ rascunhos · ${(j.published || []).length}+ publicados`;
+    if (!j.error && j.totals) {
+      const t = j.totals;
+      counts = `${t.drafts ?? '?'} rascunhos · ${t.published ?? '?'} publicados`;
+    }
   } catch { /* segue sem contagem */ }
+  const who = S.accessCheckedAs ? `verificado como @${esc(S.accessCheckedAs)}` : 'conta revisora';
   $('dash-info').innerHTML =
     `<p style="font-size:18px;margin:0 0 4px"><strong>${esc(ref.name || S.pub)}</strong></p>` +
-    `<p class="hint" style="margin:0 0 8px">${S.pub ? `<a href="https://${esc(S.pub)}" target="_blank" rel="noopener">${esc(S.pub)}</a>` : esc(ref.handle || '')} ${counts ? ' · ' + counts : ''}</p>` +
-    `<p class="hint" style="margin:0">Acesso da conta revisora confirmado ✓</p>`;
+    `<p class="hint" style="margin:0 0 8px">${S.pub ? `<a href="https://${esc(S.pub)}" target="_blank" rel="noopener">${esc(S.pub)}</a>` : esc(ref.handle || '')}${counts ? ' · ' + counts : ''}</p>` +
+    `<p class="hint" style="margin:0">Acesso confirmado ✓ (${who})</p>`;
 }
 $('dash-go').onclick = () => { showView('library'); loadLibrary(); };
 function fmtDate(d) { try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return ''; } }

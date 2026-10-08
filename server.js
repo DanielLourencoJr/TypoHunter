@@ -319,11 +319,17 @@ const server = http.createServer(async (req, res) => {
       if (!pub) return send(res, 400, { error: "missing pub" });
       const sid = reviewerSid();
       if (!sid) return send(res, 500, { error: "reviewer SID not configured" });
+      // identity used for the check (public handle, not a secret) — guards
+      // against silently falling back to the owner's SID and always saying yes
+      let checkedAs = "";
+      try {
+        checkedAs = (await fetchProfileSelf(sid)).handle || "";
+      } catch { /* keep empty; access check below still decides */ }
       try {
         await listDrafts({ sid, publicationUrl: pub, limit: 1 });
-        return send(res, 200, { hasAccess: true, pub });
+        return send(res, 200, { hasAccess: true, pub, checkedAs });
       } catch (e) {
-        return send(res, 200, { hasAccess: false, pub, reason: String(e.message).slice(0, 160) });
+        return send(res, 200, { hasAccess: false, pub, checkedAs, reason: String(e.message).slice(0, 160) });
       }
     }
 
