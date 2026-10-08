@@ -4,11 +4,11 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Revisor de Rascunhos — Substack</title>
-<script>try{document.documentElement.dataset.theme=localStorage.getItem('sdr_theme')||'dark';}catch(e){document.documentElement.dataset.theme='dark';}</script>
+<script>try{var t=localStorage.getItem('sdr_theme')||'dark';document.documentElement.dataset.theme=t;if(t==='dark')document.documentElement.classList.add('dark');}catch(e){document.documentElement.dataset.theme='dark';document.documentElement.classList.add('dark');}</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
-  darkMode: ['selector', '[data-theme="dark"]'],
+  darkMode: 'class',
   theme: { extend: {
     colors: { brand: { light: '#c2410c', DEFAULT: '#ea580c', dark: '#fb923c' } },
     fontFamily: {
@@ -280,7 +280,7 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
 <script>
 const $ = id => document.getElementById(id);
 const statusEl = $('status');
-function currentTheme() { return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'; }
+function currentTheme() { return document.documentElement.classList.contains('dark') ? 'dark' : 'light'; }
 function paintThemeBtn() {
   const label = 'Tema: ' + (currentTheme() === 'dark' ? 'escuro' : 'claro');
   if ($('theme')) $('theme').textContent = label;
@@ -289,6 +289,7 @@ function paintThemeBtn() {
 function toggleTheme() {
   const next = currentTheme() === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
+  document.documentElement.classList.toggle('dark', next === 'dark');
   try { localStorage.setItem('sdr_theme', next); } catch {}
   paintThemeBtn();
 }
