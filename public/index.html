@@ -29,7 +29,7 @@ tailwind.config = {
   --warnbg:#fef9c3; --warnink:#854d0e; --onink:#fff;
   --codebg:#1c1917; --codeink:#e7e5e4;
   --shadow:0 1px 2px rgba(0,0,0,.04); --dlgshadow:0 8px 30px rgba(0,0,0,.08);
-  --font-text:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Source Serif Pro',serif;
+  --cardbd:#ddd6cc; --cardshadow:0 1px 3px rgba(28,25,23,.08),0 6px 24px rgba(28,25,23,.06);  --font-text:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Source Serif Pro',serif;
   --font-ui:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
   --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
@@ -42,6 +42,7 @@ tailwind.config = {
   --warnbg:#2e250c; --warnink:#fde68a; --onink:#141210;
   --codebg:#0d0b0a; --codeink:#e7e5e4;
   --shadow:0 1px 2px rgba(0,0,0,.4); --dlgshadow:0 8px 30px rgba(0,0,0,.55);
+  --cardbd:#3d362f; --cardshadow:0 1px 3px rgba(0,0,0,.5),0 6px 24px rgba(0,0,0,.35);
 }
 *{box-sizing:border-box}
 body{font-family:var(--font-text);background:var(--bg);color:var(--ink);margin:0;padding:0 16px 64px}
@@ -58,7 +59,7 @@ main.narrow{max-width:760px}
 main.centered{justify-content:center;min-height:82vh}
 .view{display:none}
 .view.on{display:flex;flex-direction:column;gap:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.card{background:var(--card);border:1px solid var(--cardbd);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--cardshadow)}
 .card h2{font-family:var(--font-ui);font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}
 .card h2 .step{display:inline-block;background:var(--ink);color:var(--onink);border-radius:999px;width:22px;height:22px;line-height:22px;text-align:center;font-size:12px;margin-right:8px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
