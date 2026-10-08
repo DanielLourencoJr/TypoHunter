@@ -36,6 +36,11 @@ function sidFrom(req) {
   if (process.env.SUBSTACK_SID) return process.env.SUBSTACK_SID;
   return "";
 }
+// Reviewer (service) identity for the contributor model. Falls back to the
+// personal SID while a dedicated reviewer account doesn't exist yet.
+function reviewerSid() {
+  return process.env.REVIEWER_SID || process.env.SUBSTACK_SID || "";
+}
 function pubFrom(req, body, query) {
   const h = req.headers["x-pub"];
   if (h) return String(h);
@@ -58,6 +63,57 @@ function pubsFromProfile(profile) {
       name: pub.name || sub,
     };
   }).filter((p) => p.host);
+}
+
+async function feedTitle(host) {
+  try {
+    const r = await fetch(`https://${host}/feed`);
+    const xml = await r.text();
+    const m = /<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/.exec(xml) || /<title>([^<]*)<\/title>/.exec(xml);
+    return m ? m[1].trim().slice(0, 80) : "";
+  } catch {
+    return "";
+  }
+}
+
+// Validate a Substack reference: publication/profile URL or user handle.
+// Publication: <host>/api/v1/archive must answer 200 with a list.
+// Profile: substack.com/@<handle> must answer 200 (unknown handles redirect).
+async function resolveSubstackRef(input) {
+  let s = input.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  if (!s) throw new Error("empty");
+  // profile URL form: substack.com/@handle[/...]
+  let m = /^(?:www\.)?substack\.com\/@([A-Za-z0-9_-]+)/.exec(s);
+  if (m) return { kind: "profile", handle: m[1].toLowerCase(), host: "", name: "@" + m[1] };
+  if (s.startsWith("@")) {
+    const handle = s.slice(1).toLowerCase();
+    if (!/^[a-z0-9_-]+$/i.test(handle)) throw new Error("invalid handle");
+    // a handle may own a same-name publication — prefer it when it exists
+    try {
+      return await publicationRef(`${handle}.substack.com`);
+    } catch {
+      const r = await fetch(`https://substack.com/@${handle}`, { redirect: "manual" });
+      if (r.status === 200) return { kind: "profile", handle, host: "", name: "@" + handle };
+      throw new Error("profile not found");
+    }
+  }
+  // otherwise a publication host (with or without domain part)
+  const host = s.includes(".") ? s : `${s}.substack.com`;
+  if (!/^[a-z0-9.-]+$/i.test(host)) throw new Error("invalid Substack link");
+  return publicationRef(host);
+}
+
+async function publicationRef(host) {
+  let r;
+  try {
+    r = await fetch(`https://${host}/api/v1/archive?sort=new&limit=1&search=&offset=0`);
+  } catch {
+    throw new Error("publication not found");
+  }
+  if (!r.ok) throw new Error("publication not found");
+  const data = await r.json().catch(() => null);
+  if (!Array.isArray(data)) throw new Error("publication not found");
+  return { kind: "publication", handle: host.split(".")[0], host, name: (await feedTitle(host)) || host };
 }
 
 function send(res, code, obj) {
@@ -231,6 +287,39 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { id: profile.id, pubs: pubsFromProfile(profile) });
     }
 
+    // public client config (support contact, reviewer invite email)
+    if (req.method === "GET" && url.pathname === "/api/config") {
+      return send(res, 200, {
+        supportEmail: process.env.SUPPORT_EMAIL || "",
+        reviewerEmail: process.env.REVIEWER_EMAIL || "",
+      });
+    }
+
+    // resolve a Substack profile/publication link or handle (public, no auth)
+    if (req.method === "GET" && url.pathname === "/api/resolve") {
+      const input = (url.searchParams.get("input") || "").trim();
+      if (!input) return send(res, 400, { error: "missing input" });
+      try {
+        return send(res, 200, await resolveSubstackRef(input));
+      } catch (e) {
+        return send(res, 404, { error: String(e.message).slice(0, 200) });
+      }
+    }
+
+    // does the reviewer account have access to this publication?
+    if (req.method === "GET" && url.pathname === "/api/access") {
+      const pub = url.searchParams.get("pub") || pubFrom(req, null, url.searchParams);
+      if (!pub) return send(res, 400, { error: "missing pub" });
+      const sid = reviewerSid();
+      if (!sid) return send(res, 500, { error: "reviewer SID not configured" });
+      try {
+        await listDrafts({ sid, publicationUrl: pub, limit: 1 });
+        return send(res, 200, { hasAccess: true, pub });
+      } catch (e) {
+        return send(res, 200, { hasAccess: false, pub, reason: String(e.message).slice(0, 160) });
+      }
+    }
+
     // list drafts + published
     if (req.method === "GET" && url.pathname === "/api/posts") {
       const sid = sidFrom(req);
@@ -248,9 +337,26 @@ const server = http.createServer(async (req, res) => {
         listDrafts({ sid, publicationUrl: pub, limit }),
         listPublished({ sid, publicationUrl: pub, limit }),
       ]);
+      const item = (x, published) => ({
+        id: x.id,
+        title: x.draft_title || x.title,
+        updated: x.draft_updated_at,
+        date: x.post_date || x.draft_updated_at,
+        published: published || !!x.is_published,
+        audience: x.audience,
+        slug: x.slug || null,
+        cover: x.cover_image || null,
+        likes: x.reaction_count ?? null,
+        comments: (x.comment_count ?? 0) + (x.child_comment_count ?? 0),
+        views: x.stats?.views ?? x.stats?.opened ?? null,
+        url: x.slug
+          ? `https://${pub.replace(/^https?:\/\//, "")}/p/${x.slug}`
+          : `https://${pub.replace(/^https?:\/\//, "")}/publish/post/${x.id}`,
+        editorUrl: `https://${pub.replace(/^https?:\/\//, "")}/publish/post/${x.id}`,
+      });
       return send(res, 200, {
-        drafts: (d.posts || []).map((x) => ({ id: x.id, title: x.draft_title || x.title, updated: x.draft_updated_at, published: x.is_published })),
-        published: (p.posts || []).map((x) => ({ id: x.id, title: x.draft_title || x.title, updated: x.draft_updated_at, published: true })),
+        drafts: (d.posts || []).map((x) => item(x, x.is_published)),
+        published: (p.posts || []).map((x) => item(x, true)),
       });
     }
 
@@ -303,6 +409,7 @@ const server = http.createServer(async (req, res) => {
         if (dirty) saveStore(id, store);
       }
       const es = store.editions[edition];
+      const cleanPub = String(pub || "").replace(/^https?:\/\//, "");
       return send(res, 200, {
         id,
         edition,
@@ -310,6 +417,7 @@ const server = http.createServer(async (req, res) => {
         title: edition === "original" ? draft.draft_title || draft.title : ed?.title,
         subtitle: draft.draft_subtitle,
         isPublished: !!draft.is_published,
+        editorUrl: cleanPub ? `https://${cleanPub}/publish/post/${id}` : null,
         translations,
         store: es,
       });

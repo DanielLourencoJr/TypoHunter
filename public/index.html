@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Substack Draft Reviewer</title>
+<title>Revisor de Rascunhos — Substack</title>
 <style>
 :root{
   --bg:#faf9f7; --card:#fff; --ink:#1c1917; --muted:#78716c; --line:#e7e5e4;
@@ -12,6 +12,7 @@
 }
 *{box-sizing:border-box}
 body{font-family:Georgia,'Times New Roman',serif;background:var(--bg);color:var(--ink);margin:0;padding:0 16px 64px}
+body.bare{padding:0}
 .topbar{max-width:1080px;margin:0 auto;padding:20px 0 8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .topbar h1{font-size:22px;margin:0}
 .topbar h1 small{font-family:system-ui;font-size:12px;color:var(--muted);font-weight:400}
@@ -19,25 +20,48 @@ body{font-family:Georgia,'Times New Roman',serif;background:var(--bg);color:var(
 .pill.busy{background:#fef9c3;color:#854d0e;border-color:#fde68a}
 .pill.err{background:var(--red-bg);color:var(--red);border-color:#fecaca}
 main{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+main.narrow{max-width:760px}
+.view{display:none}
+.view.on{display:flex;flex-direction:column;gap:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .card h2{font-family:system-ui;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}
 .card h2 .step{display:inline-block;background:var(--ink);color:#fff;border-radius:999px;width:22px;height:22px;line-height:22px;text-align:center;font-size:12px;margin-right:8px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 select,input[type=text]{font-family:system-ui;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
-button{font-family:system-ui;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer}
+button{font-family:system-ui;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;transition:filter .15s}
+button:hover:not(:disabled){filter:brightness(1.12)}
 button:disabled{opacity:.45;cursor:wait}
 button.ghost{background:#fff;color:var(--ink)}
-button.danger{background:var(--red);border-color:var(--red)}
 button.accent{background:var(--accent);border-color:var(--accent)}
-.postgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media(max-width:760px){.postgrid{grid-template-columns:1fr}}
-.postlist{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto}
-.postitem{text-align:left;background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 11px;cursor:pointer;font-family:system-ui;font-size:14px;color:var(--ink)}
-.postitem:hover{border-color:var(--ink)}
-.postitem.active{border-color:var(--accent);background:var(--accent-bg)}
-.postitem small{display:block;color:var(--muted);font-size:12px}
-.search{width:100%;margin-bottom:8px}
-.doc{line-height:1.75;font-size:17px}
+button.big{font-size:16px;padding:12px 26px}
+/* welcome overlay: dialog only, nothing else */
+#welcome{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}
+#welcome.on{display:flex}
+.dialog{background:#fff;border:1px solid var(--line);border-radius:16px;padding:32px;max-width:520px;box-shadow:0 8px 30px rgba(0,0,0,.08);text-align:center}
+.dialog h1{margin:0 0 12px;font-size:24px}
+.dialog p{line-height:1.7;font-size:16px;color:#44403c}
+/* tutorial mock window */
+.mock{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:10px 0;font-family:system-ui;font-size:13px}
+.mockbar{background:#f5f5f4;padding:6px 12px;color:var(--muted);border-bottom:1px solid var(--line)}
+.mockbody{padding:12px}
+.mockrow{display:flex;gap:8px;align-items:center;padding:7px 10px;border-radius:6px;margin:3px 0;background:#fafaf9}
+.mockrow.hot{background:var(--accent-bg);border:1px solid var(--accent);font-weight:600}
+.mockbtn{display:inline-block;background:var(--ink);color:#fff;border-radius:6px;padding:4px 12px;font-size:12px}
+.tutstep{display:flex;gap:12px;margin:14px 0}
+.tutn{flex:none;width:26px;height:26px;border-radius:999px;background:var(--ink);color:#fff;font-family:system-ui;font-size:13px;display:flex;align-items:center;justify-content:center}
+/* library cards */
+.libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.libcard{text-align:left;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;padding:0;font-family:system-ui;color:var(--ink);transition:border-color .15s}
+.libcard:hover{border-color:var(--ink)}
+.libcard img.cover{width:100%;height:120px;object-fit:cover;display:block;background:#f5f5f4}
+.libcard .nocover{height:64px;background:linear-gradient(135deg,#f5f5f4,#e7e5e4);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px}
+.libcard .pad{padding:10px 12px}
+.libcard h4{margin:0 0 4px;font-size:14px;font-family:Georgia,serif}
+.libcard small{color:var(--muted);font-size:12px}
+.stats{display:flex;gap:10px;margin-top:6px;font-size:12px;color:var(--muted)}
+.badge{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted);white-space:nowrap}
+/* doc + diffs */
+.doc{line-height:1.75;font-size:17px;max-width:680px;margin:0 auto}
 .doc h1,.doc h2,.doc h3{line-height:1.3;margin:1em 0 .4em}
 .doc p{margin:.7em 0}
 .doc blockquote{border-left:3px solid var(--line);margin:.8em 0;padding:.2em 0 .2em 14px;color:#44403c}
@@ -48,138 +72,188 @@ button.accent{background:var(--accent);border-color:var(--accent)}
 .doc pre code{background:none;padding:0}
 .doc hr{border:none;border-top:1px solid var(--line);margin:1.2em 0}
 .doc img{max-width:100%;border-radius:8px}
-.diff{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:8px;font-size:14px;line-height:1.65;background:#fff}
+.meta{font-family:system-ui;font-size:13px;color:var(--muted);background:#f5f5f4;border-radius:8px;padding:8px 12px;margin-bottom:10px}
+.diff{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:.7em 0;font-size:15px;line-height:1.65;background:#fff}
 .dold,.dnew{padding:6px 10px;display:flex;gap:8px;word-break:break-word}
 .dold{background:#fef2f2}
 .dnew{background:#f0fdf4;border-top:1px solid var(--line)}
 .sign{font-family:ui-monospace,SFMono-Regular,monospace;opacity:.45;user-select:none;flex:none}
-.dctx{padding:2px 10px 2px 28px;color:var(--muted);font-size:13px;word-break:break-word}
 .hl-old{background:#fecaca;border-radius:3px;padding:0 2px;font-weight:700}
 .hl-new{background:#bbf7d0;border-radius:3px;padding:0 2px;font-weight:700}
-.sug{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;font-family:system-ui;font-size:14px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-.sug.off{opacity:.55}
-.sughead{display:flex;gap:10px;align-items:center;cursor:pointer;font-size:13px;color:var(--muted)}
-.sughead input{margin:0}
-button{transition:filter .15s}
-button:hover:not(:disabled){filter:brightness(1.12)}
-.postitem{transition:border-color .15s,background .15s}
 .hunkhead{font-family:system-ui;font-size:12px;color:var(--muted);margin:14px 0 2px}
 .hunkhead:first-child{margin-top:0}
+.sugwidget{border:2px solid var(--accent);border-radius:10px;padding:4px 4px 8px;margin:.9em 0;background:#fff}
+.sugwidget.dec-y{border-color:var(--green)}
+.sugwidget.dec-n{border-color:var(--line);opacity:.75}
+.decbar{display:flex;gap:8px;align-items:center;margin-top:8px;font-family:system-ui;font-size:13px}
+.decbar button{font-size:13px;padding:5px 14px}
+.btn-y{background:var(--green);border-color:var(--green)}
+.btn-n{background:#fff;color:var(--red);border-color:var(--red)}
+.rej{font-family:system-ui;font-size:13px;color:var(--muted);background:#f5f5f4;border-radius:8px;padding:6px 10px;margin:.7em 0}
+.tag{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted);margin-left:8px;white-space:nowrap}
 .media{font-family:system-ui;font-size:13px;background:#f5f5f4;border:1px dashed #a8a29e;border-radius:8px;padding:8px 12px;margin:.7em 0;color:#57534e}
 .media strong{color:var(--ink)}
 .media .mtag{font-size:11px;background:#e7e5e4;border-radius:999px;padding:1px 8px;margin-right:8px;white-space:nowrap}
-.meta{font-family:system-ui;font-size:13px;color:var(--muted);background:#f5f5f4;border-radius:8px;padding:8px 12px;margin-bottom:10px}
-.tag{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted);margin-left:8px;white-space:nowrap}
-.ver{display:flex;gap:8px;align-items:center;font-family:system-ui;font-size:13px;padding:6px 0;border-bottom:1px dashed var(--line)}
-.ver:last-child{border-bottom:none}
-.ver .vn{font-weight:700;min-width:34px}
-.ver button{font-size:12px;padding:4px 10px}
-.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .tabs button{font-size:13px;padding:5px 12px}
 pre.raw{white-space:pre-wrap;background:#f5f5f4;padding:12px;border-radius:8px;font-size:13px;max-height:400px;overflow:auto}
 .hint{font-family:system-ui;font-size:13px;color:var(--muted)}
-#err{display:none;background:var(--red-bg);color:var(--red);border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-family:system-ui;font-size:14px}
 .err{display:none;background:var(--red-bg);color:var(--red);border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-family:system-ui;font-size:14px;margin-top:10px}
-.footer-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
-label.check{font-family:system-ui;font-size:14px;display:flex;gap:8px;align-items:center}
+.ver{display:flex;gap:8px;align-items:center;font-family:system-ui;font-size:13px;padding:8px 0;border-bottom:1px dashed var(--line);flex-wrap:wrap}
+.ver:last-child{border-bottom:none}
+.ver .vn{font-weight:700;min-width:34px}
+.src-user{border-left:3px solid #3b82f6;padding-left:10px}
+.src-rev{border-left:3px solid var(--accent);padding-left:10px}
+.src-orig{border-left:3px solid var(--line);padding-left:10px}
+details{font-family:system-ui;font-size:13px;color:var(--muted);margin-top:8px}
+.stickybar{position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:5;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.done-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+a.btnlink{font-family:system-ui;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--ink);background:#fff;color:var(--ink);text-decoration:none;display:inline-block}
 </style>
 </head>
 <body>
-<div class="topbar">
-  <h1>Substack Draft Reviewer <small>local-only · proofread without losing formatting</small></h1>
-  <span id="status" class="pill">starting…</span>
+<div class="topbar" id="topbar" style="display:none">
+  <h1>Revisor de Rascunhos <small>para Substack · só corrige typos, nunca sua voz</small></h1>
+  <span id="status" class="pill">pronto</span>
 </div>
-<main>
-  <section class="card">
-    <h2><span class="step">1</span>Publication</h2>
-    <div class="row">
-      <select id="pub"><option value="">loading…</option></select>
-      <button id="load">Load posts</button>
+<main id="main" class="narrow" style="display:none">
+
+  <section class="view" id="v-profile">
+    <div class="card">
+      <h2><span class="step">1</span>Seu perfil no Substack</h2>
+      <p class="hint">Cole o link do seu perfil ou da sua publicação (ou seu @handle). Usamos isso para verificar se nossa conta revisora já tem acesso como contribuidora.</p>
+      <div class="row">
+        <input id="refinput" type="text" size="40" placeholder="https://voce.substack.com ou @voce" />
+        <button id="refgo" class="accent">Continuar</button>
+      </div>
+      <div class="err" id="err-prof"></div>
     </div>
-    <div class="err" id="err1"></div>
   </section>
 
-  <section class="card">
-    <h2><span class="step">2</span>Pick a post</h2>
-    <input id="filter" class="search" type="text" placeholder="Filter by title…" />
-    <div class="postgrid">
-      <div><h3 style="font-family:system-ui;font-size:13px;color:var(--muted)">Drafts</h3><div id="drafts" class="postlist"></div></div>
-      <div><h3 style="font-family:system-ui;font-size:13px;color:var(--muted)">Published</h3><div id="pubd" class="postlist"></div></div>
+  <section class="view" id="v-tutorial">
+    <div class="card">
+      <h2><span class="step">2</span>Adicione a conta revisora como contribuidora</h2>
+      <p class="hint">Sem isso não conseguimos ler nem atualizar seus rascunhos. Leva menos de 1 minuto:</p>
+      <div class="tutstep"><div class="tutn">1</div><div style="flex:1"><strong>Abra as Configurações</strong> da sua publicação no Substack.
+        <div class="mock"><div class="mockbar">voce.substack.com · Settings</div><div class="mockbody">
+          <div class="mockrow">Publication details</div><div class="mockrow hot">Team ← clique aqui</div><div class="mockrow">Sections</div>
+        </div></div></div></div>
+      <div class="tutstep"><div class="tutn">2</div><div style="flex:1"><strong>Vá em Equipe (Team)</strong> e clique em <strong>Convidar (Invite)</strong>.
+        <div class="mock"><div class="mockbar">Settings · Team</div><div class="mockbody">
+          <div class="mockrow"> owner@voce.com — Owner </div><div class="mockrow hot">+ Invite &nbsp;<span class="mockbtn">Send invite</span></div>
+        </div></div></div></div>
+      <div class="tutstep"><div class="tutn">3</div><div style="flex:1"><strong>Digite o e-mail da conta revisora:</strong>
+        <div class="mock"><div class="mockbody"><div class="mockrow hot" id="tut-mail">carregando…</div></div></div></div></div>
+      <div class="tutstep"><div class="tutn">4</div><div style="flex:1"><strong>Troque o papel para Contribuidor (Contributor)</strong> — não Linha de assinatura (Byline).
+        <div class="mock"><div class="mockbody">
+          <div class="mockrow">Byline — só aparece como autor, não edita</div><div class="mockrow hot">Contributor — vê, edita e publica rascunhos ✓</div>
+        </div></div>
+        <p class="hint">Contribuidor não vê Configurações, Estatísticas nem dados financeiros. Você pode remover a qualquer momento em Team.</p></div></div>
+      <div class="row">
+        <button id="tut-check" class="accent">Já adicionei — verificar novamente</button>
+        <span id="tut-status" class="hint"></span>
+      </div>
+      <div id="tut-support" style="margin-top:10px"></div>
+      <div class="err" id="err-tut"></div>
     </div>
-    <div class="err" id="err2"></div>
   </section>
 
-  <section class="card" id="work" style="display:none">
-    <h2><span class="step">3</span><span id="wtitle">Review</span></h2>
-    <div class="tabs" id="edtabs" style="display:none"></div>
-    <div id="docmeta" class="meta"></div>
-    <div class="tabs">
-      <button id="tabRead" class="ghost">Rendered</button>
-      <button id="tabRaw" class="ghost">Raw markdown</button>
-      <button id="tabPend" class="ghost">Pending fixes</button>
-      <button id="tabComm" class="ghost">Committed changes</button>
+  <section class="view" id="v-dash">
+    <div class="card">
+      <h2><span class="step">✓</span>Sua publicação</h2>
+      <div id="dash-info"></div>
+      <div class="row" style="margin-top:12px">
+        <button id="dash-go" class="accent big">Revisar texto</button>
+      </div>
     </div>
-    <div id="doc" class="doc"></div>
-    <pre id="raw" class="raw" style="display:none"></pre>
-    <div class="row" style="margin-top:10px">
-      <button id="proof" class="accent">Proofread this version</button>
-      <span id="mode" class="hint"></span>
-    </div>
-    <div class="err" id="err3"></div>
   </section>
 
-  <section class="card" id="sugCard" style="display:none">
-    <h2><span class="step">4</span>Review each fix — uncheck anything that changes your voice</h2>
-    <div class="row" style="margin-bottom:8px">
-      <button id="apply">Apply checked as new version</button>
-      <button id="all" class="ghost">Check all</button>
-      <button id="none" class="ghost">Uncheck all</button>
-      <span id="count" class="hint"></span>
+  <section class="view" id="v-library">
+    <div class="card">
+      <h2><span class="step">3</span>Escolha o texto</h2>
+      <input id="filter" class="search" type="text" placeholder="Filtrar por título…" style="width:100%;margin-bottom:10px" />
+      <h3 style="font-family:system-ui;font-size:13px;color:var(--muted)">Rascunhos</h3>
+      <div id="drafts" class="libgrid"></div>
+      <h3 style="font-family:system-ui;font-size:13px;color:var(--muted);margin-top:14px">Publicados</h3>
+      <div id="pubd" class="libgrid"></div>
+      <div class="err" id="err-lib"></div>
     </div>
-    <div class="err" id="err4"></div>
-    <div id="sugs"></div>
   </section>
 
-  <section class="card" id="pushCard" style="display:none">
-    <h2><span class="step">5</span>Send back to Substack</h2>
-    <div class="footer-actions">
-      <button id="push">Push latest version to draft</button>
-      <label class="check"><input type="checkbox" id="republish" /> Republish live <span class="hint">(published posts only · updates public page, no email)</span></label>
-      <span id="pushhint" class="hint"></span>
+  <section class="view" id="v-history">
+    <div class="card">
+      <h2><span class="step">4</span><span id="h-title">Histórico</span></h2>
+      <div class="tabs" id="edtabs" style="display:none"></div>
+      <div id="h-list"></div>
+      <div class="row" style="margin-top:12px">
+        <button id="h-advance" class="accent" disabled>Analisando…</button>
+        <span id="h-status" class="hint"></span>
+      </div>
+      <div class="err" id="err-hist"></div>
     </div>
-    <div class="err" id="err5"></div>
-    <p class="hint">Nothing touches Substack until you press Push. Rewind below restores any earlier version locally first.</p>
-    <h2 style="margin-top:16px"><span class="step">↺</span>Version history</h2>
-    <div id="versions"></div>
   </section>
+
+  <section class="view" id="v-review">
+    <div class="card">
+      <div class="stickybar">
+        <button id="rv-applyall">Aplicar todas as sugestões</button>
+        <button id="rv-finish" class="accent">Finalizar</button>
+        <span id="rv-count" class="hint"></span>
+      </div>
+      <div class="tabs" id="edtabs2" style="display:none"></div>
+      <h2 style="margin-top:4px"><span id="rv-title">Revisão</span></h2>
+      <div id="rv-doc" class="doc"></div>
+      <div class="err" id="err-rev"></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-done">
+    <div class="card" style="text-align:center">
+      <h2><span class="step">✓</span>Revisão pronta</h2>
+      <p id="done-summary" class="hint"></p>
+      <div class="done-actions" style="justify-content:center">
+        <button id="done-dash" class="ghost">Ir para o dashboard</button>
+        <a id="done-editor" class="btnlink" href="#" target="_blank" rel="noopener">Abrir no editor do Substack</a>
+        <button id="done-push" class="accent">Atualizar o post</button>
+      </div>
+      <p class="hint" id="done-pushnote"></p>
+      <div class="err" id="err-done"></div>
+    </div>
+  </section>
+
 </main>
+
+<div id="welcome">
+  <div class="dialog">
+    <h1>Revisor de Rascunhos</h1>
+    <p>Seus textos do Substack revisados sem copiar e colar: a ferramenta lê seu
+    rascunho, sugere <strong>apenas</strong> correções de typos e gramática —
+    sem mexer na sua voz, estrutura ou imagens — e você aprova cada uma antes
+    de publicar.</p>
+    <button id="w-go" class="accent big">Continuar</button>
+  </div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
 const statusEl = $('status');
-const pubEl = $('pub');
-let currentId = null, store = null, tab = 'read';
-let currentEdition = 'original', currentLang = null, currentIsPublished = false, currentTranslations = [];
-function EQ() { return `?edition=${encodeURIComponent(currentEdition)}`; }
-
+const S = { ref: null, pub: '', posts: null, cur: null, decisions: {}, editorUrl: null, isPublished: false, lastApplied: 0 };
 function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = 'pill' + (cls ? ' ' + cls : ''); }
-function showErr(m, where) {
-  const el = $(where || 'err1');
-  if (el) { el.style.display = 'block'; el.textContent = m; }
-  setStatus('error', 'err');
-}
-function clearErr() { document.querySelectorAll('.err').forEach(e => { e.style.display = 'none'; e.textContent = ''; }); }
-function busy(on, btn, label) {
-  document.querySelectorAll('button').forEach(b => { if (btn && b === btn) return; });
-  if (btn) { btn.disabled = on; if (label) btn.dataset.label = btn.textContent, btn.textContent = label; else if (btn.dataset.label) btn.textContent = btn.dataset.label, delete btn.dataset.label; }
-  setStatus(on ? 'working…' : 'ready', on ? 'busy' : '');
-}
-function H() { const h = {}; if (pubEl.value) { h['x-pub'] = pubEl.value; localStorage.setItem('pub', pubEl.value); } return h; }
+function showErr(m, where) { const el = $(where); if (el) { el.style.display = 'block'; el.textContent = m; } setStatus('erro', 'err'); }
+function clearErrs() { document.querySelectorAll('.err').forEach(e => { e.style.display = 'none'; e.textContent = ''; }); }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function H() { const h = {}; if (S.pub) { h['x-pub'] = S.pub; localStorage.setItem('sdr_pub', S.pub); } return h; }
+function EQ() { return `?edition=${encodeURIComponent((S.cur && S.cur.edition) || 'original')}`; }
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+  $('v-' + name).classList.add('on');
+  $('topbar').style.display = '';
+  $('main').style.display = '';
+  $('main').classList.toggle('narrow', ['profile', 'tutorial', 'dash', 'done'].includes(name));
+  window.scrollTo(0, 0);
+}
 
-/* --- Substack opaque nodes: <!-- substack-cli-node:v1 <base64url> --> ---
-   Lossless round-trip markers for embeds/media the markdown converter can't
-   express. Render as a type chip, never as raw base64. */
+/* ---------- markdown renderer (headings, quotes, lists, code, media chips) ---------- */
 const OPAQUE_RE = /<!--\s*substack-cli-(node|inline):v1\s+([A-Za-z0-9_-]+)\s*-->/g;
 function decodeOpaque(b64) {
   try {
@@ -198,39 +272,30 @@ function nodeText(node, depth = 0) {
   return '';
 }
 function mediaChip(node, inline) {
-  if (!node || typeof node !== 'object') return `<div class="media"><span class="mtag">media</span>Unsupported embed (preserved)</div>`;
+  if (!node || typeof node !== 'object') return `<div class="media"><span class="mtag">mídia</span>Embed preservado</div>`;
   const t = node.type || 'unknown';
   const a = node.attrs || {};
-  const labels = { embeddedPost: 'Embedded post', embeddedpost: 'Embedded post', youtube2: 'YouTube video', video: 'Video', image2: 'Image', captionedImage: 'Image', pullquote: 'Pullquote', calloutBlock: 'Callout', footnote: 'Footnote', footnoteAnchor: 'Footnote', pdf: 'PDF attachment', audio: 'Audio', poll: 'Poll', subscribeWidget: 'Subscribe button', paywall: 'Paywall divider', button: 'Button' };
+  const labels = { embeddedPost: 'Post incorporado', embeddedpost: 'Post incorporado', youtube2: 'Vídeo YouTube', video: 'Vídeo', image2: 'Imagem', captionedImage: 'Imagem', pullquote: 'Citação em destaque', calloutBlock: 'Destaque', footnote: 'Nota', footnoteAnchor: 'Nota', pdf: 'Anexo PDF', audio: 'Áudio', poll: 'Enquete', subscribeWidget: 'Botão assinar', paywall: 'Paywall', button: 'Botão' };
   const label = labels[t] || t.replace(/([a-z])([A-Z])/g, '$1 $2');
   let detail = '';
   if (t === 'embeddedPost' || t === 'embeddedpost') detail = esc(a.title || a.url || '');
-  else if (t === 'image2' || t === 'captionedImage') detail = esc(a.alt || a.caption || (a.src ? String(a.src).slice(0, 80) : ''));
-  else if (t === 'pullquote' || t === 'calloutBlock' || t === 'blockquote') detail = esc(nodeText(node).slice(0, 160));
+  else if (t === 'image2' || t === 'captionedImage') detail = esc(a.alt || a.caption || '');
   else detail = esc(a.title || a.text || a.url || nodeText(node).slice(0, 160));
-  const icon = inline ? '' : '▣ ';
-  const cls = 'media';
-  const inner = `<span class="mtag">${esc(label)}</span>${icon}<strong>${detail || 'preserved as-is'}</strong>`;
-  return inline ? `<span class="${cls}">${inner}</span>` : `<div class="${cls}">${inner}</div>`;
+  const inner = `<span class="mtag">${esc(label)}</span><strong>${detail || 'preservado'}</strong>`;
+  return inline ? `<span class="media">${inner}</span>` : `<div class="media">${inner}</div>`;
 }
-/* Replace opaque comments with sentinels before markdown rendering, swap in
-   chip HTML afterwards (so escaping/formatting never touches the payload). */
 function extractMedia(src) {
   const chips = [];
   const text = String(src).replace(OPAQUE_RE, (m, kind, b64) => {
-    const node = decodeOpaque(b64);
-    chips.push(mediaChip(node, kind === 'inline'));
+    chips.push(mediaChip(decodeOpaque(b64), kind === 'inline'));
     return `\u0000MEDIA${chips.length - 1}\u0000`;
   });
   return { text, chips };
 }
 function restoreMedia(html, chips) {
-  // standalone chip on its own line arrives wrapped as <p>sentinel</p> — unwrap to a div
   html = html.replace(/<p>\u0000MEDIA(\d+)\u0000<\/p>/g, (m, n) => `\u0000MEDIA${n}\u0000`);
   return html.replace(/\u0000MEDIA(\d+)\u0000/g, (m, n) => chips[Number(n)] ?? m);
 }
-
-/* --- tiny markdown renderer: headings, hr, quotes, lists, code, paragraphs --- */
 function renderInline(s) {
   s = esc(s);
   s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, '<img alt="$1" src="$2" />');
@@ -243,7 +308,7 @@ function renderInline(s) {
 }
 function renderMarkdown(src) {
   const { text: clean, chips } = extractMedia(src);
-  if (!chips.length && !clean.trim()) return '<p class="hint">(empty)</p>';
+  if (!chips.length && !clean.trim()) return '<p class="hint">(vazio)</p>';
   const lines = clean.split('\n');
   let html = '', i = 0, inCode = false, codeBuf = [], listTag = null;
   const closeList = () => { if (listTag) { html += `</${listTag}>`; listTag = null; } };
@@ -262,7 +327,6 @@ function renderMarkdown(src) {
     if ((m = line.match(/^>\s?(.*)/))) { closeList(); const q = []; while (i < lines.length && /^>\s?/.test(lines[i])) q.push(lines[i].replace(/^>\s?/, '')), i++; html += `<blockquote>${q.map(renderInline).join('<br/>')}</blockquote>`; continue; }
     if ((m = line.match(/^(\s*)[-*]\s+(.*)/))) { if (listTag !== 'ul') { closeList(); html += '<ul>'; listTag = 'ul'; } html += `<li>${renderInline(m[2])}</li>`; i++; continue; }
     if ((m = line.match(/^(\s*)\d+[.)]\s+(.*)/))) { if (listTag !== 'ol') { closeList(); html += '<ol>'; listTag = 'ol'; } html += `<li>${renderInline(m[2])}</li>`; i++; continue; }
-    // placeholder lines (media chips / preview diffs) are block boundaries, never paragraph text
     if (/^\u0000(MEDIA|DIF)\d+\u0000$/.test(line)) { closeList(); html += line; i++; continue; }
     closeList();
     const para = [line];
@@ -271,11 +335,9 @@ function renderMarkdown(src) {
     html += `<p>${para.map(renderInline).join('<br/>')}</p>`;
   }
   closeList();
-  const out = html || '<p class="hint">(empty)</p>';
+  const out = html || '<p class="hint">(vazio)</p>';
   return restoreMedia(out, chips);
 }
-
-/* --- frontmatter split for display --- */
 function splitFm(md) {
   const m = String(md).match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!m) return { meta: {}, body: md };
@@ -284,9 +346,7 @@ function splitFm(md) {
   return { meta, body: m[2] };
 }
 
-/* --- git-like diffs: each fix shown as -old line / +new line with the
-   changed term highlighted. Operates on raw lines so what you see is
-   exactly what apply writes. */
+/* ---------- git-style diff blocks ---------- */
 function emphLine(line, needle, cls) {
   const i = line.indexOf(needle);
   if (i === -1 || !needle) return esc(line);
@@ -307,60 +367,10 @@ function diffHunk(md, s) {
   };
 }
 function diffBlock(h, reason, idx) {
-  return `${idx != null ? `<div class="hunkhead">fix ${idx}${reason ? ` · ${esc(reason)}` : ''}</div>` : ''}` +
+  return `${idx != null ? `<div class="hunkhead">correção ${idx}${reason ? ` · ${esc(reason)}` : ''}</div>` : ''}` +
     `<div class="diff"><div class="dold"><span class="sign">−</span><span>${h.oldHtml}</span></div>` +
     `<div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div></div>`;
 }
-/* Line ops between two texts (LCS; prefix/suffix fallback on huge inputs). */
-function lineOps(aText, bText) {
-  const A = String(aText).split('\n'), B = String(bText).split('\n');
-  const n = A.length, m = B.length;
-  let ops;
-  if (n * m > 1000000) {
-    // fallback: trim common prefix/suffix, treat the middle as one big change
-    let pre = 0;
-    while (pre < n && pre < m && A[pre] === B[pre]) pre++;
-    let suf = 0;
-    while (suf < n - pre && suf < m - pre && A[n - 1 - suf] === B[m - 1 - suf]) suf++;
-    ops = [];
-    for (let k = 0; k < pre; k++) ops.push({ t: ' ', a: k, b: k });
-    for (let k = pre; k < n - suf; k++) ops.push({ t: '-', a: k });
-    for (let k = pre; k < m - suf; k++) ops.push({ t: '+', b: k });
-    for (let k = 0; k < suf; k++) ops.push({ t: ' ', a: n - suf + k, b: m - suf + k });
-  } else {
-    const W = m + 1;
-    const dp = new Uint32Array((n + 1) * W);
-    for (let i = n - 1; i >= 0; i--) {
-      for (let j = m - 1; j >= 0; j--) {
-        dp[i * W + j] = A[i] === B[j] ? dp[(i + 1) * W + j + 1] + 1 : Math.max(dp[(i + 1) * W + j], dp[i * W + j + 1]);
-      }
-    }
-    ops = [];
-    let i = 0, j = 0;
-    while (i < n && j < m) {
-      if (A[i] === B[j]) { ops.push({ t: ' ', a: i, b: j }); i++; j++; }
-      else if (dp[(i + 1) * W + j] >= dp[i * W + j + 1]) { ops.push({ t: '-', a: i }); i++; }
-      else { ops.push({ t: '+', b: j }); j++; }
-    }
-    while (i < n) { ops.push({ t: '-', a: i }); i++; }
-    while (j < m) { ops.push({ t: '+', b: j }); j++; }
-  }
-  return { A, B, ops };
-}
-function groupHunks(ops, ctx) {
-  const marked = new Set();
-  ops.forEach((op, p) => { if (op.t !== ' ') for (let k = Math.max(0, p - ctx); k <= Math.min(ops.length - 1, p + ctx); k++) marked.add(k); });
-  const sorted = [...marked].sort((x, y) => x - y);
-  const hunks = [];
-  let cur = null;
-  sorted.forEach((p) => {
-    if (!cur || p > cur.end + 1) { cur = { start: p, end: p }; hunks.push(cur); }
-    else cur.end = p;
-  });
-  return hunks;
-}
-/* Shared layout for both diff tabs: full text with .diff blocks embedded in
-   place. placements: [{line, span, html}] in body coordinates. */
 function embedBlocks(bodyMd, placements) {
   const covered = new Set();
   const byLine = new Map();
@@ -376,330 +386,352 @@ function embedBlocks(bodyMd, placements) {
     else if (!covered.has(i)) out.push(ln);
   });
   let html = renderMarkdown(out.join('\n'));
-  html = html.replace(/<p>\u0000DIF(\d+)\u0000<\/p>/g, (mm, nn) => `\u0000DIF${nn}\u0000`);
-  return html.replace(/\u0000DIF(\d+)\u0000/g, (mm, nn) => htmlBlocks[Number(nn)] ?? mm);
-}
-/* Word highlight for a changed line pair (GitHub-style): common prefix/suffix
-   stay plain, the middle gets the red/green term highlight. */
-function wordPair(oldLine, newLine) {
-  let pre = 0;
-  while (pre < oldLine.length && pre < newLine.length && oldLine[pre] === newLine[pre]) pre++;
-  let suf = 0;
-  while (suf < oldLine.length - pre && suf < newLine.length - pre &&
-    oldLine[oldLine.length - 1 - suf] === newLine[newLine.length - 1 - suf]) suf++;
-  const oMid = oldLine.slice(pre, oldLine.length - suf);
-  const nMid = newLine.slice(pre, newLine.length - suf);
-  const open = esc(oldLine.slice(0, pre));
-  const close = esc(oldLine.slice(oldLine.length - suf));
-  return {
-    oldHtml: open + (oMid ? `<span class="hl-old">${esc(oMid)}</span>` : '') + close || '&nbsp;',
-    newHtml: open + (nMid ? `<span class="hl-new">${esc(nMid)}</span>` : '') + close || '&nbsp;',
-  };
-}
-/* Committed changes as inline blocks: same layout as the pending-fixes tab,
-   sourced from the v0 → current version diff instead of suggestions. */
-function inlineVersionDiff(oldBody, newBody) {
-  const { A, B, ops } = lineOps(oldBody, newBody);
-  if (!ops.some(o => o.t !== ' ')) return '';
-  const placements = [];
-  groupHunks(ops, 0).forEach((h) => {
-    let ai = 0, bi = 0;
-    for (let p = 0; p < h.start; p++) { const o = ops[p]; if (o.t !== '+') ai++; if (o.t !== '-') bi++; }
-    const startA = ai;
-    let spanA = 0;
-    const dels = [], adds = [];
-    for (let p = h.start; p <= h.end; p++) {
-      const o = ops[p];
-      if (o.t === '-') { dels.push(A[ai]); ai++; spanA++; }
-      else if (o.t === '+') { adds.push(B[bi]); bi++; }
-    }
-    const rows = [];
-    const pairs = Math.max(dels.length, adds.length);
-    for (let k = 0; k < pairs; k++) {
-      if (k < dels.length && k < adds.length) {
-        const w = wordPair(dels[k], adds[k]);
-        rows.push(`<div class="dold"><span class="sign">−</span><span>${w.oldHtml}</span></div>`);
-        rows.push(`<div class="dnew"><span class="sign">+</span><span>${w.newHtml}</span></div>`);
-      } else if (k < dels.length) {
-        rows.push(`<div class="dold"><span class="sign">−</span><span>${esc(dels[k]) || '&nbsp;'}</span></div>`);
-      } else {
-        rows.push(`<div class="dnew"><span class="sign">+</span><span>${esc(adds[k]) || '&nbsp;'}</span></div>`);
-      }
-    }
-    placements.push({ line: startA, span: spanA, html: `<div class="diff">${rows.join('')}</div>` });
-  });
-  return embedBlocks(oldBody, placements);
+  html = html.replace(/<p>\u0000DIF(\d+)\u0000<\/p>/g, (m, n) => `\u0000DIF${n}\u0000`);
+  return html.replace(/\u0000DIF(\d+)\u0000/g, (m, n) => htmlBlocks[Number(n)] ?? m);
 }
 
-/* Preview diff INSIDE the text: the full article renders normally, but each
-   checked fix is replaced in place by its -old/+new block, exactly where the
-   line occurs. Same order + first-occurrence rules as Apply. */
-function previewInline(bodyMd, suggestions) {
-  let cur = bodyMd;
+/* ---------- onboarding ---------- */
+$('w-go').onclick = () => { $('welcome').classList.remove('on'); document.body.classList.remove('bare'); bootProfile(); };
+function bootProfile() {
+  const saved = localStorage.getItem('sdr_ref');
+  if (saved) {
+    try {
+      S.ref = JSON.parse(saved);
+      return enterWithRef(S.ref);
+    } catch { localStorage.removeItem('sdr_ref'); }
+  }
+  showView('profile');
+  $('refinput').focus();
+}
+$('refgo').onclick = submitRef;
+$('refinput').addEventListener('keydown', e => { if (e.key === 'Enter') submitRef(); });
+async function submitRef() {
+  clearErrs();
+  const input = $('refinput').value.trim();
+  if (!input) { showErr('Cole o link do seu perfil ou publicação, ou seu @handle.', 'err-prof'); return; }
+  setStatus('verificando…', 'busy');
+  $('refgo').disabled = true;
+  try {
+    const r = await fetch('/api/resolve?input=' + encodeURIComponent(input));
+    const j = await r.json();
+    if (j.error) throw new Error(j.error + ' — confira o link e tente de novo.');
+    S.ref = j;
+    localStorage.setItem('sdr_ref', JSON.stringify(j));
+    await enterWithRef(j);
+  } catch (e) { showErr(e.message, 'err-prof'); }
+  finally { $('refgo').disabled = false; setStatus('pronto'); }
+}
+async function enterWithRef(ref) {
+  // perfis precisam virar publicação: tenta <handle>.substack.com
+  let pub = ref.host || '';
+  if (!pub && ref.handle) {
+    try {
+      const r = await fetch('/api/resolve?input=' + encodeURIComponent(ref.handle + '.substack.com'));
+      const j = await r.json();
+      if (!j.error) { pub = j.host; S.ref = j; localStorage.setItem('sdr_ref', JSON.stringify(j)); }
+    } catch { /* segue sem pub: mostra tutorial genérico */ }
+  }
+  S.pub = pub;
+  if (!pub) { showView('tutorial'); fillTutorial(null); return; }
+  setStatus('verificando acesso…', 'busy');
+  try {
+    const r = await fetch('/api/access?pub=' + encodeURIComponent(pub));
+    const j = await r.json();
+    if (j.hasAccess) showDash();
+    else { showView('tutorial'); fillTutorial(pub); }
+  } catch (e) { showErr('Falha ao verificar acesso: ' + e.message, 'err-prof'); showView('profile'); }
+  setStatus('pronto');
+}
+let CFG = { supportEmail: '', reviewerEmail: '' };
+async function fillTutorial(pub) {
+  try {
+    const r = await fetch('/api/config');
+    CFG = await r.json();
+  } catch { /* opcional */ }
+  $('tut-mail').textContent = CFG.reviewerEmail || '(e-mail da conta revisora — peça ao responsável pelo serviço)';
+  $('tut-status').textContent = pub ? `Verificando acesso a ${pub}…` : '';
+  $('tut-support').innerHTML = CFG.supportEmail
+    ? `<span class="hint">Travou em alguma etapa? <a href="mailto:${esc(CFG.supportEmail)}">Fale com o suporte por e-mail</a>.</span>`
+    : '';
+}
+$('tut-check').onclick = async () => {
+  clearErrs();
+  if (!S.pub) { showErr('Nenhuma publicação vinculada. Volte e informe seu link.', 'err-tut'); return; }
+  $('tut-check').disabled = true;
+  $('tut-status').textContent = 'Verificando…';
+  try {
+    const r = await fetch('/api/access?pub=' + encodeURIComponent(S.pub));
+    const j = await r.json();
+    if (j.hasAccess) showDash();
+    else { $('tut-status').textContent = 'Ainda sem acesso. Confira o convite (papel Contribuidor) e tente de novo.'; }
+  } catch (e) { showErr(e.message, 'err-tut'); }
+  finally { $('tut-check').disabled = false; }
+};
+
+/* ---------- dashboard + biblioteca ---------- */
+async function showDash() {
+  showView('dash');
+  const ref = S.ref || {};
+  let counts = '';
+  try {
+    const r = await fetch('/api/posts?limit=1', { headers: H() });
+    const j = await r.json();
+    if (!j.error) counts = `${(j.drafts || []).length}+ rascunhos · ${(j.published || []).length}+ publicados`;
+  } catch { /* segue sem contagem */ }
+  $('dash-info').innerHTML =
+    `<p style="font-size:18px;margin:0 0 4px"><strong>${esc(ref.name || S.pub)}</strong></p>` +
+    `<p class="hint" style="margin:0 0 8px">${S.pub ? `<a href="https://${esc(S.pub)}" target="_blank" rel="noopener">${esc(S.pub)}</a>` : esc(ref.handle || '')} ${counts ? ' · ' + counts : ''}</p>` +
+    `<p class="hint" style="margin:0">Acesso da conta revisora confirmado ✓</p>`;
+}
+$('dash-go').onclick = () => { showView('library'); loadLibrary(); };
+function fmtDate(d) { try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return ''; } }
+function fmtStat(v) { return v == null ? '—' : String(v); }
+function libCard(p) {
+  const cover = p.cover ? `<img class="cover" src="${esc(p.cover)}" loading="lazy" alt="" />` : `<div class="nocover">sem capa</div>`;
+  const stats = p.published
+    ? `<div class="stats"><span>👁 ${fmtStat(p.views)}</span><span>♥ ${fmtStat(p.likes)}</span><span>💬 ${p.comments ?? '—'}</span></div>`
+    : `<div class="stats"><span>${esc(p.audience || 'everyone')}</span></div>`;
+  return `<button class="libcard" data-id="${p.id}">${cover}<div class="pad"><h4>${esc(p.title || '(sem título)')}</h4>` +
+    `<small>${fmtDate(p.date)}${p.slug ? ' · /' + esc(p.slug) : ''}</small>${stats}</div></button>`;
+}
+async function loadLibrary() {
+  clearErrs(); setStatus('carregando textos…', 'busy');
+  try {
+    const r = await fetch('/api/posts?limit=30', { headers: H() });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    S.posts = j;
+    const f = ($('filter').value || '').toLowerCase();
+    const match = p => !f || (p.title || '').toLowerCase().includes(f);
+    $('drafts').innerHTML = j.drafts.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
+    $('pubd').innerHTML = j.published.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
+    document.querySelectorAll('.libcard').forEach(b => b.onclick = () => openHistory(Number(b.dataset.id)));
+    setStatus('pronto');
+  } catch (e) { showErr(e.message, 'err-lib'); }
+}
+$('filter').oninput = () => {
+  if (!S.posts) return;
+  const f = ($('filter').value || '').toLowerCase();
+  const match = p => !f || (p.title || '').toLowerCase().includes(f);
+  $('drafts').innerHTML = S.posts.drafts.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
+  $('pubd').innerHTML = S.posts.published.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
+  document.querySelectorAll('.libcard').forEach(b => b.onclick = () => openHistory(Number(b.dataset.id)));
+};
+
+/* ---------- histórico + análise em segundo plano ---------- */
+function originOf(v) {
+  const n = v.note || '';
+  if (/^synced from Substack/.test(n)) return { cls: 'src-user', label: 'Editor (você)' };
+  if (/^applied/.test(n)) return { cls: 'src-rev', label: 'Revisor' };
+  if (/^rewind/.test(n)) return { cls: 'src-rev', label: 'Revisor (reversão local)' };
+  return { cls: 'src-orig', label: 'Original do Substack' };
+}
+async function openHistory(id, edition) {
+  clearErrs();
+  S.cur = { id, edition: edition || 'original', sugs: null, sugState: 'idle', editorUrl: null, isPublished: false, translations: [] };
+  S.decisions = {};
+  showView('history');
+  setStatus('abrindo…', 'busy');
+  try {
+    const r = await fetch(`/api/posts/${id}?edition=${encodeURIComponent(S.cur.edition)}`, { headers: H() });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    S.cur.store = j.store;
+    S.cur.title = j.title; S.cur.lang = j.language;
+    S.cur.editorUrl = j.editorUrl; S.cur.isPublished = !!j.isPublished;
+    S.cur.translations = j.translations || [];
+    renderHistory(j);
+    // dispara a análise na hora, mas a tela fica até o usuário avançar
+    analyzeInBackground();
+    setStatus('pronto');
+  } catch (e) { showErr(e.message, 'err-hist'); }
+}
+function renderHistory(j) {
+  const st = S.cur.store;
+  $('h-title').textContent = ' ' + (j.title || '#' + S.cur.id);
+  const tabs = S.cur.translations.length
+    ? `<button class="${S.cur.edition === 'original' ? '' : 'ghost'}" data-ed="original">Original</button>` +
+      S.cur.translations.map(t => `<button class="${S.cur.edition === t.language ? '' : 'ghost'}" data-ed="${t.language}">${esc(t.language.toUpperCase())}</button>`).join('')
+    : '';
+  const ed = $('edtabs');
+  ed.style.display = tabs ? '' : 'none';
+  ed.innerHTML = tabs;
+  ed.querySelectorAll('button').forEach(b => b.onclick = () => openHistory(S.cur.id, b.dataset.ed));
+  const pushes = st.pushes || [];
+  $('h-list').innerHTML = st.versions.map(v => {
+    const o = originOf(v);
+    const marks = pushes.filter(p => p.version === v.n)
+      .map(p => `<span class="tag">publicada${p.republished ? ' + republicada' : ''} ${(p.at || '').slice(0, 16).replace('T', ' ')}</span>`).join('');
+    return `<div class="ver ${o.cls}"><span class="vn">v${v.n}</span><span>${esc(v.note)} <span class="hint">${(v.createdAt || '').slice(0, 16).replace('T', ' ')}</span><span class="tag">${o.label}</span>${marks}</span></div>`;
+  }).join('') + `<p class="hint">O texto não é exibido aqui de propósito — revise só na próxima tela.</p>`;
+}
+async function analyzeInBackground() {
+  const cur = S.cur;
+  cur.sugState = 'working';
+  $('h-advance').disabled = true;
+  $('h-status').textContent = 'Enviando versão atual para análise…';
+  try {
+    const r = await fetch(`/api/posts/${cur.id}/proofread?edition=${encodeURIComponent(cur.edition)}`,
+      { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ language: cur.lang }) });
+    const j = await r.json();
+    if (cur !== S.cur) return; // usuário trocou de texto no meio
+    if (r.status === 429) {
+      cur.sugState = 'rate';
+      $('h-status').innerHTML = `Limite da IA atingido. <button id="h-retry" class="ghost">Tentar de novo</button>`;
+      $('h-retry').onclick = analyzeInBackground;
+      return;
+    }
+    if (j.error) throw new Error(j.error);
+    cur.sugs = j.suggestions || [];
+    cur.sugState = 'ready';
+    // mantém sugestões aplicáveis; descarta as obsoletas silenciosamente aqui
+    const md = cur.store.versions[cur.store.versions.length - 1].md;
+    const fresh = cur.sugs.filter(s => s.original === '  (double space)' ? /[^ ]  +[^ ]/.test(md) : md.includes(s.original));
+    cur.dropped = cur.sugs.length - fresh.length;
+    cur.sugs = fresh;
+    $('h-status').textContent = cur.sugs.length
+      ? `${cur.sugs.length} sugestões prontas${cur.dropped ? ` (${cur.dropped} ignoradas: texto mudou)` : ''}.`
+      : 'Nenhuma correção necessária — texto limpo.';
+    $('h-advance').disabled = false;
+    $('h-advance').textContent = 'Avançar para revisão';
+  } catch (e) {
+    if (cur !== S.cur) return;
+    cur.sugState = 'error';
+    $('h-status').innerHTML = `Falha na análise: ${esc(e.message)} <button id="h-retry" class="ghost">Tentar de novo</button>`;
+    $('h-retry').onclick = analyzeInBackground;
+  }
+}
+$('h-advance').onclick = () => { renderReview(false); showView('review'); };
+
+/* ---------- revisão inline ---------- */
+function renderReview(scroll) {
+  const st = S.cur.store;
+  const md = st.versions[st.versions.length - 1].md;
+  const { body } = splitFm(md);
+  $('rv-title').textContent = ' ' + (S.cur.title || '#' + S.cur.id);
+  renderEdTabs2();
+  let cur = body;
   const placements = [];
   const skipped = [];
-  let delta = 0; // cumulative line-count drift from already-walked fixes
-  suggestions.forEach((s, k) => {
-    // placement by character position: also works for multi-line originals
+  let delta = 0;
+  const sugs = S.cur.sugs || [];
+  sugs.forEach((s, k) => {
     const pos = s.original === '  (double space)' ? cur.search(/[^ ]  +[^ ]/) : cur.indexOf(s.original);
     if (pos === -1) { skipped.push(k + 1); return; }
     const eIdx = cur.slice(0, pos).split('\n').length - 1;
     const spanOrig = s.original === '  (double space)' ? 1 : s.original.split('\n').length;
     const spanNew = s.original === '  (double space)' ? 1 : s.replacement.split('\n').length;
-    placements.push({
-      line: eIdx - delta,
-      span: spanOrig,
-      html: diffBlock(diffHunk(cur, s), s.reason, k + 1),
-    });
-    // evolve exactly like server apply (full-text, first occurrence)
-    if (s.original === '  (double space)') cur = cur.replace(/[^ ]  +[^ ]/g, m => m.replace(/  +/g, ' '));
-    else { const i = cur.indexOf(s.original); if (i !== -1) cur = cur.slice(0, i) + s.replacement + cur.slice(i + s.original.length); }
-    delta += spanNew - spanOrig;
-  });
-  let html = embedBlocks(bodyMd, placements);
-  if (skipped.length) html += `<p class="hint">fix ${skipped.join(', ')} not shown (outside the text body or overlapped by another fix).</p>`;
-  return html;
-}
-
-function checkedSuggestions() {
-  return (store.suggestions || []).filter(s => document.querySelector(`input[data-s="${s.id}"]`)?.checked);
-}
-
-/* --- flow --- */
-async function loadPubs() {
-  setStatus('connecting…', 'busy');
-  try {
-    const r = await fetch('/api/me', { headers: H() });
-    const j = await r.json();
-    if (j.error) throw new Error(j.error);
-    const saved = localStorage.getItem('pub');
-    pubEl.innerHTML = j.pubs.map(p => `<option value="${p.host}">${esc(p.name)} (${p.host})</option>`).join('');
-    if (saved && [...pubEl.options].some(o => o.value === saved)) pubEl.value = saved;
-    else if (j.pubs.length) localStorage.setItem('pub', pubEl.value);
-    setStatus('ready');
-    loadPosts();
-  } catch (e) { showErr('Could not reach Substack: ' + e.message, 'err1'); }
-}
-
-let allPosts = { drafts: [], published: [] };
-async function loadPosts() {
-  clearErr(); setStatus('loading posts…', 'busy');
-  try {
-    const r = await fetch('/api/posts?limit=30', { headers: H() });
-    const j = await r.json();
-    if (j.error && j.pubs) { // server asks to pick (shouldn't happen, dropdown set)
-      pubEl.innerHTML = j.pubs.map(p => `<option value="${p.host}">${esc(p.name)}</option>`).join('');
-      setStatus('pick a publication'); return;
-    }
-    if (j.error) throw new Error(j.error);
-    allPosts = j; renderPostLists(); setStatus('ready');
-  } catch (e) { showErr(e.message, 'err2'); }
-}
-function postBtn(p) {
-  return `<button class="postitem${p.id === currentId ? ' active' : ''}" data-id="${p.id}">${esc(p.title || '(untitled)')}<small>#${p.id}${p.updated ? ' · ' + p.updated.slice(0, 10) : ''}</small></button>`;
-}
-function renderPostLists() {
-  const f = ($('filter').value || '').toLowerCase();
-  const match = p => !f || (p.title || '').toLowerCase().includes(f);
-  $('drafts').innerHTML = allPosts.drafts.filter(match).map(postBtn).join('') || '<span class="hint">(none)</span>';
-  $('pubd').innerHTML = allPosts.published.filter(match).map(postBtn).join('') || '<span class="hint">(none)</span>';
-  document.querySelectorAll('.postitem').forEach(b => b.onclick = () => openPost(Number(b.dataset.id), 'original'));
-}
-
-async function openPost(id, edition) {
-  clearErr(); currentId = id; tab = 'read';
-  if (edition) currentEdition = edition;
-  setStatus('opening…', 'busy');
-  try {
-    const r = await fetch(`/api/posts/${id}${EQ()}`, { headers: H() });
-    const j = await r.json();
-    if (j.error) throw new Error(j.error);
-    store = j.store;
-    currentLang = j.language; currentIsPublished = !!j.isPublished; currentTranslations = j.translations || [];
-    $('work').style.display = '';
-    $('wtitle').textContent = ` ${j.title || '#' + id}`;
-    renderPostLists(); renderEdTabs(); renderDoc(); renderVersions();
-    if (store.suggestions?.length) { $('sugCard').style.display = ''; renderSugs(); }
-    else { $('sugCard').style.display = 'none'; $('sugs').innerHTML = ''; $('count').textContent = ''; }
-    // nothing to send back until a fix was applied (v0 is identical to Substack)
-    $('pushCard').style.display = store.versions.length > 1 ? '' : 'none';
-    updatePushState();
-    setStatus('ready');
-  } catch (e) { showErr(e.message, 'err2'); }
-}
-
-function renderEdTabs() {
-  const box = $('edtabs');
-  if (!currentTranslations.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  box.style.display = '';
-  const btn = (ed, label) => `<button class="${ed === currentEdition ? '' : 'ghost'}" data-ed="${ed}">${label}</button>`;
-  box.innerHTML = btn('original', 'Original') + currentTranslations.map(t => btn(t.language, t.language.toUpperCase())).join('');
-  box.querySelectorAll('button').forEach(b => b.onclick = () => openPost(currentId, b.dataset.ed));
-}
-
-function updatePushState() {
-  // Substack only allows translation edits on unpublished drafts
-  const locked = currentEdition !== 'original' && currentIsPublished;
-  $('push').disabled = locked;
-  $('push').textContent = currentEdition === 'original' ? 'Push latest version to draft' : `Push latest version to ${currentEdition.toUpperCase()} edition`;
-  let hint = $('pushhint');
-  if (!hint) return;
-  hint.textContent = locked ? 'Locked: Substack does not allow editing translations of published posts.' : '';
-}
-
-function currentBody() { return splitFm(store.versions[store.versions.length - 1].md); }
-function renderDoc() {
-  const { meta, body } = currentBody();
-  $('docmeta').textContent = [meta.title && ('Title: ' + meta.title), meta.subtitle && ('Subtitle: ' + meta.subtitle), meta.audience && ('Audience: ' + meta.audience)].filter(Boolean).join('  ·  ') || ('Version v' + (store.versions.length - 1));
-  $('docmeta').textContent += `  ·  Edition: ${currentEdition === 'original' ? 'Original' + (currentLang ? ` (${currentLang})` : '') : currentEdition.toUpperCase()}`;
-  const latest = store.versions[store.versions.length - 1];
-  $('mode').textContent = `v${latest.n} · ${latest.note} · engine: ${store.mode}`;
-  $('raw').textContent = latest.md;
-  if (tab === 'raw') { $('doc').style.display = 'none'; $('raw').style.display = ''; }
-  else if (tab === 'pend') {
-    $('doc').style.display = ''; $('raw').style.display = 'none';
-    const checked = checkedSuggestions();
-    $('doc').innerHTML = checked.length
-      ? previewInline(body, checked)
-      : '<p class="hint">Check fixes in section 4 to preview them here, inside the text.</p>';
-  }
-  else if (tab === 'comm') {
-    $('doc').style.display = ''; $('raw').style.display = 'none';
-    if (store.versions.length < 2) {
-      $('doc').innerHTML = '<p class="hint">Nothing applied yet — v0 is the Substack original.</p>';
+    const v = S.decisions[s.id];
+    const h = diffHunk(cur, s);
+    if (!v) {
+      placements.push({
+        line: eIdx - delta, span: spanOrig,
+        html: `<div class="sugwidget" data-sid="${s.id}" data-pending="1">` +
+          diffBlock(h, s.reason, k + 1) +
+          `<div class="decbar"><button class="btn-y" data-dec-y="${s.id}">✓ Aceitar</button>` +
+          `<button class="btn-n" data-dec-n="${s.id}">✗ Rejeitar</button></div></div>`,
+      });
+    } else if (v === 'y') {
+      placements.push({
+        line: eIdx - delta, span: spanOrig,
+        html: `<div class="sugwidget dec-y"><div class="diff"><div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div></div></div>`,
+      });
+      if (s.original === '  (double space)') cur = cur.replace(/[^ ]  +[^ ]/g, m => m.replace(/  +/g, ' '));
+      else { const i = cur.indexOf(s.original); if (i !== -1) cur = cur.slice(0, i) + s.replacement + cur.slice(i + s.original.length); }
+      delta += spanNew - spanOrig;
     } else {
-      const latest = store.versions[store.versions.length - 1];
-      const committed = inlineVersionDiff(splitFm(store.versions[0].md).body, splitFm(latest.md).body);
-      $('doc').innerHTML = `<p class="hint">v0 → v${latest.n}, inside the text</p>` +
-        (committed || '<p class="hint">No differences from the Substack original.</p>');
+      placements.push({
+        line: eIdx - delta, span: spanOrig,
+        html: `<div class="rej">✗ mantida: “${esc(s.original.slice(0, 100))}” <span class="tag">rejeitada</span></div>`,
+      });
     }
-  }
-  else {
-    $('doc').style.display = ''; $('raw').style.display = 'none';
-    $('doc').innerHTML = renderMarkdown(body);
-  }
-}
-
-function isApplicable(md, s) {
-  if (s.original === '  (double space)') return /[^ ]  +[^ ]/.test(md);
-  return md.includes(s.original);
-}
-function renderSugs() {
-  const sugs = store.suggestions || [];
-  const md = store.versions[store.versions.length - 1].md;
-  if (!sugs.length) {
-    $('count').textContent = `0 suggestions · engine ${store.mode}`;
-    $('sugs').innerHTML = '<p class="hint">No fixes needed — the text looks clean.</p>';
-    return;
-  }
-  // already-applied (or overlapped) fixes no longer match the current text:
-  // show them separately instead of as actionable diffs
-  const applicable = sugs.filter(s => isApplicable(md, s));
-  const stale = sugs.filter(s => !isApplicable(md, s));
-  $('count').textContent = `${applicable.length} to review · ${stale.length} already applied/not found · engine ${store.mode}`;
-  $('sugs').innerHTML = applicable.map((s) => `
-    <div class="sug" data-wrap="${s.id}">
-      <label class="sughead"><input type="checkbox" data-s="${s.id}" checked />
-      <span>${esc(s.id)}<span class="tag">${esc(s.reason)}</span></span>
-      </label>
-      ${diffBlock(diffHunk(md, s))}
-    </div>`).join('') + (stale.length ? `
-    <details><summary class="hint">Already applied or not found (${stale.length}) — details</summary>
-    ${stale.map((s) => `<div class="sug off"><span class="hint">${esc(s.id)} · ${esc(s.reason)} · “${esc(s.original.slice(0, 80))}” no longer in this version</span></div>`).join('')}
-    </details>` : '');
-  document.querySelectorAll('#sugs input').forEach(c => c.onchange = () => {
-    c.closest('.sug').classList.toggle('off', !c.checked);
-    if (tab === 'pend') renderDoc();
   });
+  let html = embedBlocks(body, placements);
+  if (skipped.length) html += `<p class="hint">Correções ${skipped.join(', ')} fora do corpo do texto ou sobrepostas.</p>`;
+  $('rv-doc').innerHTML = html;
+  const pend = sugs.filter(s => !S.decisions[s.id]).length;
+  const acc = sugs.filter(s => S.decisions[s.id] === 'y').length;
+  $('rv-count').textContent = `${pend} pendentes · ${acc} aceitas de ${sugs.length}`;
+  document.querySelectorAll('[data-dec-y]').forEach(b => b.onclick = () => decide(b.dataset.decY, 'y'));
+  document.querySelectorAll('[data-dec-n]').forEach(b => b.onclick = () => decide(b.dataset.decN, 'n'));
+  updateTopButtons();
+  if (scroll) {
+    const next = document.querySelector('.sugwidget[data-pending="1"]');
+    if (next) next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
-
-function renderVersions() {
-  const pushes = store.pushes || [];
-  $('versions').innerHTML = store.versions.map(v => {
-    const marks = pushes.filter(p => p.version === v.n)
-      .map(p => `<span class="tag">pushed${p.republished ? ' + republished' : ''} ${(p.at || '').slice(0, 16).replace('T', ' ')}</span>`).join('');
-    return `<div class="ver"><span class="vn">v${v.n}</span><span>${esc(v.note)} <span class="hint">${(v.createdAt || '').slice(0, 16).replace('T', ' ')}</span>${marks}</span><button class="ghost" data-v="${v.n}">rewind here</button></div>`;
-  }).join('');
-  document.querySelectorAll('#versions button').forEach(b => b.onclick = async () => {
-    if (!confirm(`Rewind to v${b.dataset.v}? Creates a new local version (Substack untouched).`)) return;
-    busy(true);
-    try {
-      const r = await fetch(`/api/posts/${currentId}/rewind${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ version: Number(b.dataset.v) }) });
-      const j = await r.json(); if (j.error) throw new Error(j.error);
-      store = j.store; renderDoc(); renderVersions(); setStatus('ready');
-    } catch (e) { showErr(e.message, 'err5'); } finally { busy(false); }
-  });
+function renderEdTabs2() {
+  const box = $('edtabs2');
+  if (!S.cur.translations.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  const btn = (ed, label) => `<button class="${ed === S.cur.edition ? '' : 'ghost'}" data-ed="${ed}">${label}</button>`;
+  box.innerHTML = btn('original', 'Original') + S.cur.translations.map(t => btn(t.language, t.language.toUpperCase())).join('');
+  box.querySelectorAll('button').forEach(b => b.onclick = () => openHistory(S.cur.id, b.dataset.ed));
 }
-
-$('load').onclick = loadPosts;
-$('filter').oninput = renderPostLists;
-$('tabRead').onclick = () => { try { tab = 'read'; renderDoc(); } catch (e) { showErr('Render failed: ' + e.message, 'err3'); } };
-$('tabRaw').onclick = () => { try { tab = 'raw'; renderDoc(); } catch (e) { showErr('Render failed: ' + e.message, 'err3'); } };
-$('tabPend').onclick = () => { try { tab = 'pend'; renderDoc(); } catch (e) { showErr('Preview failed: ' + e.message, 'err3'); } };
-$('tabComm').onclick = () => { try { tab = 'comm'; renderDoc(); } catch (e) { showErr('Preview failed: ' + e.message, 'err3'); } };
-
-$('proof').onclick = async () => {
-  clearErr(); clearInterval(window._rt); busy(true, $('proof'), 'Proofreading…');
+function decide(id, v) {
+  S.decisions[id] = v;
+  renderReview(true);
+}
+function updateTopButtons() {
+  const any = (S.cur.sugs || []).length > 0;
+  $('rv-applyall').disabled = !any;
+  $('rv-finish').disabled = !any;
+}
+async function finishReview(mode) {
+  clearErrs();
+  const sugs = S.cur.sugs || [];
+  const ids = mode === 'all' ? sugs.map(s => s.id) : sugs.filter(s => S.decisions[s.id] === 'y').map(s => s.id);
+  setStatus('aplicando…', 'busy');
   try {
-    const r = await fetch(`/api/posts/${currentId}/proofread${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ language: currentLang }) });
+    if (ids.length) {
+      const r = await fetch(`/api/posts/${S.cur.id}/apply?edition=${encodeURIComponent(S.cur.edition)}`,
+        { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ acceptedIds: ids }) });
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      const es = j.store;
+      S.lastApplied = es.versions.length - 1;
+    } else {
+      S.lastApplied = S.cur.store.versions.length - 1;
+    }
+    const acc = mode === 'all' ? sugs.length : sugs.filter(s => S.decisions[s.id] === 'y').length;
+    $('done-summary').textContent = mode === 'all'
+      ? `${sugs.length} sugestões aplicadas em “${S.cur.title || '#' + S.cur.id}”.`
+      : `${acc} aceitas aplicadas · ${sugs.length - acc} rejeitadas/ignoradas descartadas.`;
+    $('done-editor').href = S.cur.editorUrl || '#';
+    const upd = $('done-push');
+    upd.textContent = S.cur.isPublished ? 'Atualizar o post publicado' : 'Atualizar o rascunho';
+    $('done-pushnote').textContent = S.cur.isPublished
+      ? 'Isso republica a página pública sem enviar e-mail.'
+      : 'Isso grava a nova versão no rascunho do Substack.';
+    showView('done');
+    setStatus('pronto');
+  } catch (e) { showErr(e.message, 'err-rev'); }
+}
+$('rv-applyall').onclick = () => finishReview('all');
+$('rv-finish').onclick = () => finishReview('final');
+$('done-dash').onclick = () => showDash();
+$('done-push').onclick = async () => {
+  clearErrs();
+  setStatus('atualizando…', 'busy');
+  $('done-push').disabled = true;
+  try {
+    const body = { version: S.lastApplied };
+    if (S.cur.isPublished) body.republish = true;
+    const r = await fetch(`/api/posts/${S.cur.id}/push?edition=${encodeURIComponent(S.cur.edition)}`,
+      { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json();
-    if (r.status === 429) { groqRetry(j); return; }
     if (j.error) throw new Error(j.error);
-    store.suggestions = j.suggestions; store.mode = j.mode;
-    $('sugCard').style.display = '';
-    renderSugs(); renderDoc(); setStatus(j.suggestions.length ? `${j.suggestions.length} fixes proposed` : 'clean — no fixes');
-  } catch (e) { showErr(e.message, 'err3'); } finally { busy(false, $('proof')); }
+    $('done-pushnote').textContent = `Atualizado ✓ (v${j.pushedVersion}${j.republished ? ' + republicado' : ''}).`;
+    $('done-push').disabled = true;
+    setStatus('pronto');
+  } catch (e) { showErr(e.message, 'err-done'); $('done-push').disabled = false; }
 };
 
-/* Groq rate limit: show the message with a Try-Again button on a countdown. */
-function groqRetry(j) {
-  busy(false, $('proof'));
-  setStatus('rate limited', 'err');
-  clearInterval(window._rt);
-  const box = $('err3');
-  box.style.display = 'block';
-  let left = Math.max(1, Math.ceil(Number(j.retryInSec) || 10));
-  const short = String(j.error || 'Rate limit reached.').replace(/\{.*$/, '').slice(0, 220);
-  const tick = () => {
-    box.innerHTML = `${esc(short)}<br/><br/><button id="retryBtn"${left > 0 ? ' disabled' : ''}>${left > 0 ? `Try again in ${left}s` : 'Try again now'}</button>`;
-    const b = $('retryBtn');
-    if (b && left <= 0) b.onclick = () => { clearInterval(window._rt); clearErr(); $('proof').click(); };
-    if (left <= 0) clearInterval(window._rt);
-    left--;
-  };
-  tick();
-  window._rt = setInterval(tick, 1000);
-}
-
-async function applyIds(ids) {
-  clearErr(); busy(true);
-  try {
-    const r = await fetch(`/api/posts/${currentId}/apply${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ acceptedIds: ids }) });
-    const j = await r.json(); if (j.error) throw new Error(j.error);
-    await openPost(currentId);
-  } catch (e) { showErr(e.message, 'err4'); busy(false); }
-};
-$('apply').onclick = () => {
-  const ids = [...document.querySelectorAll('#sugs input:checked')].map(e => e.dataset.s);
-  if (!ids.length) return showErr('Check at least one fix first.', 'err4');
-  applyIds(ids);
-};
-$('all').onclick = () => document.querySelectorAll('#sugs input').forEach(c => { c.checked = true; c.closest('.sug').classList.remove('off'); });
-$('none').onclick = () => document.querySelectorAll('#sugs input').forEach(c => { c.checked = false; c.closest('.sug').classList.add('off'); });
-
-$('push').onclick = async () => {
-  const republish = $('republish').checked;
-  if (!confirm(republish ? 'Push + REPUBLISH live? Public page updates immediately (no email).' : `Push latest version to the ${currentEdition === 'original' ? 'Substack draft' : currentEdition.toUpperCase() + ' edition'}?`)) return;
-  clearErr(); busy(true, $('push'), 'Pushing…');
-  try {
-    const r = await fetch(`/api/posts/${currentId}/push${EQ()}`, { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ republish }) });
-    const j = await r.json(); if (j.error) throw new Error(j.error);
-    setStatus(`pushed v${j.pushedVersion}${j.republished ? ' + republished' : ''}`);
-    await openPost(currentId);
-  } catch (e) { showErr(e.message, 'err5'); } finally { busy(false, $('push')); }
-};
-
-loadPubs();
+/* ---------- boot ---------- */
+(function boot() {
+  document.body.classList.add('bare');
+  $('welcome').classList.add('on');
+})();
 </script>
 </body>
 </html>
