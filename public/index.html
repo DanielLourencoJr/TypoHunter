@@ -466,7 +466,7 @@ $('tut-check').onclick = async () => {
     const r = await fetch('/api/access?pub=' + encodeURIComponent(S.pub));
     const j = await r.json();
     if (j.hasAccess) showDash();
-    else { $('tut-status').textContent = 'Ainda sem acesso. Confira o convite (papel Contribuidor) e tente de novo.'; }
+    else { $('tut-status').textContent = 'Ainda sem acesso. Se você já enviou o convite, ele está aguardando aceite do lado do revisor (verificamos de novo a cada tentativa). Confira o papel Contribuidor e tente de novo.'; }
   } catch (e) { showErr(e.message, 'err-tut'); }
   finally { $('tut-check').disabled = false; }
 };
