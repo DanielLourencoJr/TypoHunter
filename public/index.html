@@ -5,8 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Revisor de Rascunhos — Substack</title>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem('sdr_theme')||'dark';}catch(e){document.documentElement.dataset.theme='dark';}</script>
+<link rel="stylesheet" href="/vendor/pico.min.css" />
 <style>
 :root{
+  --pico-border-radius:.5rem;
+  --pico-primary:#c2410c; --pico-primary-background:#c2410c; --pico-primary-border:#c2410c;
+  --pico-primary-hover:#9a3412; --pico-primary-hover-background:#9a3412; --pico-primary-hover-border:#9a3412;
+  --pico-primary-focus:rgba(194,65,12,.25); --pico-primary-inverse:#fff;
+}
   --bg:#faf9f7; --card:#fff; --ink:#1c1917; --muted:#78716c; --line:#e7e5e4;
   --accent:#c2410c; --accent-bg:#fff7ed; --green:#15803d; --green-bg:#f0fdf4;
   --red:#b91c1c; --red-bg:#fef2f2; --radius:12px;
@@ -28,6 +34,9 @@
   --warnbg:#2e250c; --warnink:#fde68a; --onink:#141210;
   --codebg:#0d0b0a; --codeink:#e7e5e4;
   --shadow:0 1px 2px rgba(0,0,0,.4); --dlgshadow:0 8px 30px rgba(0,0,0,.55);
+  --pico-primary:#fb923c; --pico-primary-background:#ea580c; --pico-primary-border:#ea580c;
+  --pico-primary-hover:#fb923c; --pico-primary-hover-background:#fb923c; --pico-primary-hover-border:#fb923c;
+  --pico-primary-focus:rgba(251,146,60,.35); --pico-primary-inverse:#141210;
 }
 *{box-sizing:border-box}
 body{font-family:var(--font-text);background:var(--bg);color:var(--ink);margin:0;padding:0 16px 64px}
@@ -48,12 +57,7 @@ main.narrow{max-width:760px}
 .card h2 .step{display:inline-block;background:var(--ink);color:var(--onink);border-radius:999px;width:22px;height:22px;line-height:22px;text-align:center;font-size:12px;margin-right:8px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
-button{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:var(--onink);cursor:pointer;transition:filter .15s}
-button:hover:not(:disabled){filter:brightness(1.12)}
-button:disabled{opacity:.45;cursor:wait}
-button.ghost{background:transparent;color:var(--ink)}
-button.accent{background:var(--accent);border-color:var(--accent)}
-button.big{font-size:16px;padding:12px 26px}
+/* base buttons: Pico (see vendor/pico.min.css); only variants below */
 /* welcome overlay: dialog only, nothing else */
 #welcome{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}
 #welcome.on{display:flex}
@@ -136,7 +140,7 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
   <h1>Revisor de Rascunhos <small>para Substack · só corrige typos, nunca sua voz</small></h1>
   <span id="status" class="pill">pronto</span>
   <span class="spacer"></span>
-  <button id="theme" class="ghost" style="font-size:12px;padding:5px 12px">Tema: escuro</button>
+  <button id="theme" class="secondary" style="font-size:12px;padding:5px 12px">Tema: escuro</button>
 </div>
 <main id="main" class="narrow" style="display:none">
 
@@ -146,7 +150,7 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
       <p class="hint">Cole o link do seu perfil ou da sua publicação (ou seu @handle). Usamos isso para verificar se nossa conta revisora já tem acesso como contribuidora.</p>
       <div class="row">
         <input id="refinput" type="text" size="40" placeholder="https://voce.substack.com ou @voce" />
-        <button id="refgo" class="accent">Continuar</button>
+        <button id="refgo">Continuar</button>
       </div>
       <div class="err" id="err-prof"></div>
     </div>
@@ -175,7 +179,7 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
         <strong>Private</strong> (não Public) — assim a conta revisora não aparece na página
         Sobre/Pessoas da sua publicação; ela trabalha nos bastidores.</p></div></div>
       <div class="row">
-        <button id="tut-check" class="accent">Já adicionei — verificar novamente</button>
+        <button id="tut-check">Já adicionei — verificar novamente</button>
         <span id="tut-status" class="hint"></span>
       </div>
       <div id="tut-support" style="margin-top:10px"></div>
@@ -188,7 +192,7 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
       <h2><span class="step">✓</span>Sua publicação</h2>
       <div id="dash-info"></div>
       <div class="row" style="margin-top:12px">
-        <button id="dash-go" class="accent big">Revisar texto</button>
+        <button id="dash-go">Revisar texto</button>
       </div>
     </div>
   </section>
@@ -211,7 +215,7 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
       <div class="tabs" id="edtabs" style="display:none"></div>
       <div id="h-list"></div>
       <div class="row" style="margin-top:12px">
-        <button id="h-advance" class="accent" disabled>Analisando…</button>
+        <button id="h-advance" disabled>Analisando…</button>
         <span id="h-status" class="hint"></span>
       </div>
       <div class="err" id="err-hist"></div>
@@ -221,8 +225,8 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
   <section class="view" id="v-review">
     <div class="card">
       <div class="stickybar">
-        <button id="rv-applyall">Aplicar todas as sugestões</button>
-        <button id="rv-finish" class="accent">Finalizar</button>
+        <button id="rv-applyall" class="secondary">Aplicar todas as sugestões</button>
+        <button id="rv-finish">Finalizar</button>
         <span id="rv-count" class="hint"></span>
       </div>
       <div class="tabs" id="edtabs2" style="display:none"></div>
@@ -237,9 +241,9 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
       <h2><span class="step">✓</span>Revisão pronta</h2>
       <p id="done-summary" class="hint"></p>
       <div class="done-actions" style="justify-content:center">
-        <button id="done-dash" class="ghost">Ir para o dashboard</button>
+        <button id="done-dash" class="secondary">Ir para o dashboard</button>
         <a id="done-editor" class="btnlink" href="#" target="_blank" rel="noopener">Abrir no editor do Substack</a>
-        <button id="done-push" class="accent">Atualizar o post</button>
+        <button id="done-push">Atualizar o post</button>
       </div>
       <p class="hint" id="done-pushnote"></p>
       <div class="err" id="err-done"></div>
@@ -255,8 +259,8 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
     rascunho, sugere <strong>apenas</strong> correções de typos e gramática —
     sem mexer na sua voz, estrutura ou imagens — e você aprova cada uma antes
     de publicar.</p>
-    <button id="w-go" class="accent big">Continuar</button>
-    <div style="margin-top:14px"><button id="w-theme" class="ghost" style="font-size:12px;padding:5px 12px">Tema: escuro</button></div>
+    <button id="w-go">Continuar</button>
+    <div style="margin-top:14px"><button id="w-theme" class="secondary" style="font-size:12px;padding:5px 12px">Tema: escuro</button></div>
   </div>
 </div>
 
@@ -588,8 +592,8 @@ function renderHistory(j) {
   const st = S.cur.store;
   $('h-title').textContent = ' ' + (j.title || '#' + S.cur.id);
   const tabs = S.cur.translations.length
-    ? `<button class="${S.cur.edition === 'original' ? '' : 'ghost'}" data-ed="original">Original</button>` +
-      S.cur.translations.map(t => `<button class="${S.cur.edition === t.language ? '' : 'ghost'}" data-ed="${t.language}">${esc(t.language.toUpperCase())}</button>`).join('')
+    ? `<button class="${S.cur.edition === 'original' ? '' : 'outline'}" data-ed="original">Original</button>` +
+      S.cur.translations.map(t => `<button class="${S.cur.edition === t.language ? '' : 'outline'}" data-ed="${t.language}">${esc(t.language.toUpperCase())}</button>`).join('')
     : '';
   const ed = $('edtabs');
   ed.style.display = tabs ? '' : 'none';
@@ -615,7 +619,7 @@ async function analyzeInBackground() {
     if (cur !== S.cur) return; // usuário trocou de texto no meio
     if (r.status === 429) {
       cur.sugState = 'rate';
-      $('h-status').innerHTML = `Limite da IA atingido. <button id="h-retry" class="ghost">Tentar de novo</button>`;
+      $('h-status').innerHTML = `Limite da IA atingido. <button id="h-retry" class="secondary">Tentar de novo</button>`;
       $('h-retry').onclick = analyzeInBackground;
       return;
     }
@@ -635,7 +639,7 @@ async function analyzeInBackground() {
   } catch (e) {
     if (cur !== S.cur) return;
     cur.sugState = 'error';
-    $('h-status').innerHTML = `Falha na análise: ${esc(e.message)} <button id="h-retry" class="ghost">Tentar de novo</button>`;
+    $('h-status').innerHTML = `Falha na análise: ${esc(e.message)} <button id="h-retry" class="secondary">Tentar de novo</button>`;
     $('h-retry').onclick = analyzeInBackground;
   }
 }
@@ -685,7 +689,7 @@ function renderReview(scroll) {
   const rej = sugs.filter(s => S.decisions[s.id] === 'n');
   if (rej.length) {
     html += `<details><summary class="hint">Rejeitadas (${rej.length}) — clique para reabrir alguma</summary>` +
-      rej.map(s => `<div class="rej">✗ “${esc(s.original.slice(0, 100))}” <button class="ghost" data-reopen="${s.id}">reabrir</button></div>`).join('') + `</details>`;
+      rej.map(s => `<div class="rej">✗ “${esc(s.original.slice(0, 100))}” <button class="secondary" data-reopen="${s.id}">reabrir</button></div>`).join('') + `</details>`;
   }
   $('rv-doc').innerHTML = html;
   const pend = sugs.filter(s => !S.decisions[s.id]).length;
@@ -705,7 +709,7 @@ function renderEdTabs2() {
   const box = $('edtabs2');
   if (!S.cur.translations.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = '';
-  const btn = (ed, label) => `<button class="${ed === S.cur.edition ? '' : 'ghost'}" data-ed="${ed}">${label}</button>`;
+  const btn = (ed, label) => `<button class="${ed === S.cur.edition ? '' : 'outline'}" data-ed="${ed}">${label}</button>`;
   box.innerHTML = btn('original', 'Original') + S.cur.translations.map(t => btn(t.language, t.language.toUpperCase())).join('');
   box.querySelectorAll('button').forEach(b => b.onclick = () => openHistory(S.cur.id, b.dataset.ed));
 }
