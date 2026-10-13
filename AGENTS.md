@@ -44,6 +44,9 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
   on published posts — UI disables it there.
 - `<!-- substack-cli-node/inline:v1 … -->` markers must round-trip byte-identical:
   prompt forbids touching them + `filterOpaque` drops overlapping suggestions.
+  Never sent raw to the model: `maskOpaque` swaps each for `[midia N: tipo]`
+  (~72% fewer prompt chars on media-heavy texts). Suggestions touching URLs
+  are dropped (captions share `![alt](url "caption")` syntax with links).
   UI renders them as media chips via sentinel swap (`\u0000DIFn\u0000`).
 
 ## Styling
