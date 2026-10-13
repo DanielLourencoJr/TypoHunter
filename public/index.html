@@ -855,14 +855,34 @@ function fmtStat(v) { return v == null ? '—' : String(v); }
 function libCard(p) {
   const cover = p.cover ? `<img class="cover" src="${esc(p.cover)}" loading="lazy" alt="" />` : `<div class="nocover">sem capa</div>`;
   const stats = p.published
-    ? `<div class="stats"><span>👁 ${fmtStat(p.views)}</span><span>♥ ${fmtStat(p.likes)}</span><span>💬 ${p.comments ?? '—'}</span></div>`
+    ? `<div class="stats"><span>👁 ${fmtStat(p.views)}</span><span>♥ ${fmtStat(p.likes)}</span><span>💬 ${p.comments ?? '—'}</span>${p.restacks != null ? `<span>🔁 ${p.restacks}</span>` : ''}</div>`
     : `<div class="stats"><span>${esc(p.audience || 'everyone')}</span></div>`;
   return `<button class="libcard transition duration-150 hover:-translate-y-0.5 hover:shadow-xl" data-id="${p.id}">${cover}<div class="pad"><h4>${esc(p.title || '(sem título)')}</h4>` +
-    `<small>${fmtDate(p.date)}${p.slug ? ' · /' + esc(p.slug) : ''}</small>${stats}</div></button>`;
+    `<small>${fmtDate(p.date)}${p.slug ? ' · /' + esc(p.slug) : ''}${p.words != null ? ` · ${p.words} palavras` : ''}</small>${stats}</div></button>`;
 }
 const PAGE = 20;
-async function loadLibrary() {
-  clearErrs(); setStatus('carregando textos…', 'busy');
+// Admin archive item -> libCard shape (covers + public stats, no SID needed).
+function admCard(p) {
+  return { id: 'adm:' + p.slug, title: p.title, date: p.date, slug: p.slug, published: true,
+    cover: p.cover || null, views: null, likes: p.likes, comments: p.comments,
+    restacks: p.restacks, words: p.words };
+}
+async function loadAdminMore() {
+  const btn = $('more');
+  btn.disabled = true;
+  try {
+    ADM_OFFSET += ADM_PAGE;
+    const input = $('adm-pub').value.trim();
+    const r = await fetch(`/api/admin/archive?pub=${encodeURIComponent(input)}&limit=${ADM_PAGE}&offset=${ADM_OFFSET}`, { headers: AH() });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    S.posts.published.push(...j.posts.map(admCard));
+    S.adminMore = j.posts.length >= ADM_PAGE;
+    renderLibrary();
+  } catch (e) { showErr(e.message, 'err-lib'); ADM_OFFSET -= ADM_PAGE; }
+  finally { btn.disabled = false; }
+}
+async function loadLibrary() {  clearErrs(); setStatus('carregando textos…', 'busy');
   S.postsOffset = 0;
   try {
     const r = await fetch(`/api/posts?limit=${PAGE}&offset=0`, { headers: H() });
@@ -885,7 +905,7 @@ function renderLibrary() {
     $('pubd').innerHTML = j.published.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
     document.querySelectorAll('.libcard').forEach(b => b.onclick = () => openHistory(b.dataset.id));
     $('lib-count').textContent = `${j.published.length} posts públicos`;
-    $('more').style.display = 'none';
+    $('more').style.display = S.adminMore ? '' : 'none';
     return;
   }
   $('drafts').innerHTML = j.drafts.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
@@ -902,6 +922,7 @@ function renderLibrary() {
   $('more').style.display = (moreD || moreP) ? '' : 'none';
 }
 $('more').onclick = async () => {
+  if (S.admin) return loadAdminMore();
   const btn = $('more');
   btn.disabled = true;
   try {
@@ -1065,6 +1086,7 @@ function handleAnalysisResult(cur, j) {
     // version to it so the review screen renders with full context.
     cur.store.versions[cur.store.versions.length - 1].md = j.text || '';
     cur.title = j.title || cur.title;
+    if (j.cover) { $('h-cover').style.display = ''; $('h-cover').src = j.cover; }
   }
   cur.sugs = j.suggestions || [];
   cur.sugState = 'ready';
@@ -1267,6 +1289,8 @@ $('done-push').onclick = async () => {
 // ids ("adm:<slug>") that match no writer endpoint (those require numeric ids),
 // and the review screen hides apply/finish — so nothing can be written back.
 let ADM_HOST = '';
+const ADM_PAGE = 20;
+let ADM_OFFSET = 0;
 function AH() { return S.admin ? { 'x-admin-key': S.admin.key } : {}; }
 $('adm-go').onclick = async () => {
   clearErrs();
@@ -1300,12 +1324,14 @@ $('adm-list').onclick = async () => {
   if (pm) { openHistory('adm:' + pm[2], null, pm[1]); return; }
   $('adm-status').textContent = 'Buscando posts…';
   try {
-    const r = await fetch('/api/admin/archive?pub=' + encodeURIComponent(input), { headers: AH() });
+    const r = await fetch(`/api/admin/archive?pub=${encodeURIComponent(input)}&limit=${ADM_PAGE}&offset=0`, { headers: AH() });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     ADM_HOST = j.host;
-    S.posts = { drafts: [], published: j.posts.map(p => ({ id: 'adm:' + p.slug, title: p.title, date: p.date, slug: p.slug, published: true })), totals: { drafts: 0, published: j.posts.length } };
+    ADM_OFFSET = 0;
+    S.posts = { drafts: [], published: j.posts.map(admCard), totals: { drafts: 0 } };
     S.postsOffset = 0;
+    S.adminMore = j.posts.length >= ADM_PAGE;
     renderLibrary();
     $('adm-status').textContent = `${j.posts.length} posts recentes de ${j.name}. Escolha um para analisar.`;
   } catch (e) {

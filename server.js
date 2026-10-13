@@ -453,14 +453,22 @@ const server = http.createServer(async (req, res) => {  try {
         return send(res, 404, { error: "publication not found" });
       }
       if (ref.kind !== "publication" || !ref.host) return send(res, 400, { error: "not a publication" });
-      const r = await fetch(`https://${ref.host}/api/v1/archive?sort=new&limit=12`);
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || 20));
+      const offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
+      const r = await fetch(`https://${ref.host}/api/v1/archive?sort=new&limit=${limit}&offset=${offset}`);
       const items = await r.json().catch(() => null);
       if (!r.ok || !Array.isArray(items)) return send(res, 502, { error: "archive fetch failed" });
       return send(res, 200, {
         host: ref.host,
         name: ref.name,
+        // All of these are public: covers, like/comment/restack counts and
+        // word counts need no SID. View counts are author-only analytics and
+        // stay unavailable here (shown as — in the UI).
         posts: items.filter((p) => p.slug).map((p) => ({
           id: p.id, title: p.title || "(untitled)", slug: p.slug, date: (p.post_date || "").slice(0, 10),
+          subtitle: p.subtitle || "", cover: p.cover_image || null,
+          likes: p.reaction_count ?? null, comments: p.comment_count ?? null,
+          restacks: p.restacks ?? null, words: p.wordcount ?? null,
         })),
       });
     }
@@ -498,7 +506,7 @@ const server = http.createServer(async (req, res) => {  try {
           onUsage: (u) => progress(u.chunk),
         });
         return {
-          title, subtitle, chars: text.length, text,
+          title, subtitle, chars: text.length, text, cover: post.cover_image || null,
           suggestions: result.suggestions, mode: result.mode,
         };
       });
