@@ -60,6 +60,10 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
 
 - Groq `openai/gpt-oss-120b` rejects `response_format: json_object` (HTTP 400
   `json_validate_failed`). Prompt JSON-only and tolerate fences/prose in parse.
+- Review prompt lives in `prompts/proofread.yaml` (minimal-YAML subset, no
+  deps); `lib/proofread.js` re-reads it on every analysis, so prompt edits
+  need no restart. Verify prompt changes with the clean control (clean PT
+  text must return `[]`).
 - Never write literal NUL bytes in JS regex source (they mangle to U+FFFD);
   always use the `\u0000` escape.
 - `node --check` catches syntax only; re-read edited regions for dropped
