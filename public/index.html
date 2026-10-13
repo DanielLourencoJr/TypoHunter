@@ -951,7 +951,10 @@ async function openHistory(id, edition, adminHost) {
   clearErrs();
   if (String(id).startsWith('adm:')) {
     // Read-only admin post: synthetic store, no writer endpoints involved.
+    // Cover and title already came with the listing — show them immediately
+    // instead of waiting for the analysis to finish.
     const slug = String(id).slice(4);
+    const card = (S.posts?.published || []).find((p) => p.id === id) || {};
     S.cur = { id, edition: 'original', readonly: true, admin: { host: adminHost || ADM_HOST, slug },
       sugs: null, sugState: 'idle', editorUrl: null, isPublished: false, translations: [] };
     S.decisions = {};
@@ -959,7 +962,7 @@ async function openHistory(id, edition, adminHost) {
     S.cur.store = { versions: [{ n: 0, md: '', note: 'original (somente leitura)', createdAt: new Date().toISOString() }], suggestions: [], pushes: [] };
     showView('history');
     setStatus('abrindo…', 'busy');
-    renderHistory({ title: slug.replace(/-/g, ' ') });
+    renderHistory({ title: card.title || slug.replace(/-/g, ' '), cover: card.cover || null });
     analyzeInBackground();
     setStatus('pronto');
     return;
