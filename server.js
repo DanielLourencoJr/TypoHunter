@@ -6,7 +6,7 @@ import { fetchProfileSelf } from "../SubstackCLI/lib/auth.js";
 import { getDraft, listDrafts, listPublished, updateDraft, publishDraft, translateDraft } from "../SubstackCLI/lib/drafts.js";
 import { draftToMarkdown, tiptapToMarkdown } from "../SubstackCLI/lib/convert.js";
 import { parseFrontmatter, stringifyFrontmatter } from "../SubstackCLI/lib/frontmatter.js";
-import { proofreadMarkdown, applySuggestions } from "./lib/proofread.js";
+import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
@@ -299,8 +299,7 @@ function edStore(store, edition, md) {
   return store.editions[edition];
 }
 
-const server = http.createServer(async (req, res) => {
-  try {
+const server = http.createServer(async (req, res) => {  try {
     const url = new URL(req.url, "http://localhost");
     // static (never cached: the UI evolves fast during testing)
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {

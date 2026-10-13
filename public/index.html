@@ -677,6 +677,17 @@ function minimalChangePair(before, after) {
       if (following) { suffix = Math.max(0, suffix - following[0].length); oldEnd = before.length - suffix; newEnd = after.length - suffix; }
     }
   }
+  // Intra-word change ("Esoterico"->"Esotérico"): highlight the whole word,
+  // not the bare differing letters — a one-letter accent is invisible
+  // otherwise. Word chars are Unicode-aware so accented letters count.
+  // Skipped when the change itself spans whitespace (multi-word edits keep
+  // the minimal highlight). Both sides share the common prefix/suffix, so
+  // the forward extension advances old and new ends in lockstep.
+  const isW = c => /[\p{L}\p{N}_]/u.test(c || '');
+  if (!/\s/.test(before.slice(start, oldEnd) + after.slice(start, newEnd))) {
+    while (start > 0 && isW(before[start - 1])) start--;
+    while (isW(before[oldEnd])) { oldEnd++; newEnd++; }
+  }
   return { oldStart: start, oldEnd, newStart: start, newEnd };
 }
 function inlineChange(text, start, end, sid, cls, selected) {
