@@ -740,7 +740,7 @@ function embedBlocks(bodyMd, placements) {
 }
 
 /* ---------- onboarding ---------- */
-$('w-go').onclick = () => { $('welcome').classList.remove('on'); document.body.classList.remove('bare'); bootProfile(); };
+$('w-go').onclick = () => { S.admin = null; $('welcome').classList.remove('on'); document.body.classList.remove('bare'); bootProfile(); };
 function bootProfile() {
   const saved = localStorage.getItem('sdr_ref');
   if (saved) {
@@ -1234,6 +1234,11 @@ $('adm-go').onclick = async () => {
 function enterAdminLibrary() {
   S.posts = null;
   showView('library');
+  $('adm-bar').style.display = '';
+  $('drafts').innerHTML = '<span class="hint">(rascunhos exigem acesso de contribuidor)</span>';
+  $('pubd').innerHTML = '<span class="hint">(liste uma publicação acima)</span>';
+  $('lib-count').textContent = '';
+  $('more').style.display = 'none';
   $('adm-status').textContent = 'Digite uma publicação ou o link de um post público.';
 }
 $('adm-list').onclick = async () => {
