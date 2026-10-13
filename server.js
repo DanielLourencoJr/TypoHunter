@@ -116,8 +116,23 @@ async function publicationRef(host) {
   return { kind: "publication", handle: host.split(".")[0], host, name: (await feedTitle(host)) || host };
 }
 
-function send(res, code, obj) {
-  const body = JSON.stringify(obj);
+// One-way HTML -> prose extraction for ANALYSIS ONLY. This never
+// round-trips (admin results are never applied or pushed), so a simple
+// tag strip is enough. Anchor text is kept, URLs are dropped, image
+// captions (figcaption) are kept as plain prose.
+function htmlToProse(html) {
+  let t = String(html || "");
+  t = t.replace(/<(script|style)[\s\S]*?<\/\1>/gi, "");
+  t = t.replace(/<br\s*\/?>/gi, "\n");
+  t = t.replace(/<\/(p|h1|h2|h3|h4|li|blockquote|div|tr|ul|ol|figcaption)>/gi, "\n\n");
+  t = t.replace(/<[^>]*>/g, "");
+  t = t.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/g, "'");
+  t = t.replace(/&#(\d+);/g, (m, n) => String.fromCharCode(Number(n)));
+  return t.split("\n").map((l) => l.trim()).filter(Boolean).join("\n\n").slice(0, 200000);
+}
+
+function send(res, code, obj) {  const body = JSON.stringify(obj);
   res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store", "Content-Length": Buffer.byteLength(body) });
   res.end(body);
 }
@@ -269,7 +284,6 @@ function edStore(store, edition, md) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://localhost");
-
     // static (never cached: the UI evolves fast during testing)
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
       const f = path.join(ROOT, "public", "index.html");
@@ -323,6 +337,83 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         return send(res, 200, { hasAccess: false, pub, checkedAs, reason: String(e.message).slice(0, 160) });
       }
+    }
+
+    // ---- read-only admin review (public posts only: no SID, no store writes) ----
+
+    // list recent public posts of any publication (no SID needed)
+    if (req.method === "GET" && url.pathname === "/api/admin/archive") {
+      const input = (url.searchParams.get("pub") || "").trim();
+      if (!input) return send(res, 400, { error: "missing pub" });
+      let ref;
+      try {
+        ref = await resolveSubstackRef(input);
+      } catch {
+        return send(res, 404, { error: "publication not found" });
+      }
+      if (ref.kind !== "publication" || !ref.host) return send(res, 400, { error: "not a publication" });
+      const r = await fetch(`https://${ref.host}/api/v1/archive?sort=new&limit=12`);
+      const items = await r.json().catch(() => null);
+      if (!r.ok || !Array.isArray(items)) return send(res, 502, { error: "archive fetch failed" });
+      return send(res, 200, {
+        host: ref.host,
+        name: ref.name,
+        posts: items.filter((p) => p.slug).map((p) => ({
+          id: p.id, title: p.title || "(untitled)", slug: p.slug, date: (p.post_date || "").slice(0, 10),
+        })),
+      });
+    }
+
+    // run the same review engine over a public post or pasted text.
+    // Ephemeral by design: never touches data/<id>/store.json, and the UI
+    // offers no apply/push (a non-contributor cannot write to the post).
+    if (req.method === "POST" && url.pathname === "/api/admin/analyze") {
+      const body = await readJson(req);
+      let title = String(body.title || "").slice(0, 200);
+      let subtitle = "";
+      let text = "";
+      if (body.text) {
+        text = String(body.text).slice(0, 200000);
+        if (!title) title = "(pasted text)";
+      } else {
+        const pub = String(body.pub || "").trim();
+        const slug = String(body.slug || "").trim();
+        if (!pub || !/^[A-Za-z0-9_-]+$/.test(slug)) return send(res, 400, { error: "need pub + slug, or text" });
+        let ref;
+        try {
+          ref = await resolveSubstackRef(pub);
+        } catch {
+          return send(res, 404, { error: "publication not found" });
+        }
+        if (ref.kind !== "publication" || !ref.host) return send(res, 400, { error: "not a publication" });
+        const r = await fetch(`https://${ref.host}/api/v1/posts/${slug}`);
+        const post = await r.json().catch(() => null);
+        if (!r.ok || !post || !post.body_html) return send(res, 404, { error: "post not found or paywalled" });
+        title = post.title || slug;
+        subtitle = post.subtitle || "";
+        text = htmlToProse(post.body_html);
+      }
+      if (!text.trim()) return send(res, 400, { error: "empty text" });
+      let result;
+      try {
+        result = await proofreadMarkdown(text, {
+          apiKey: process.env.GROQ_API_KEY,
+          model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+          language: body.language || undefined,
+        });
+      } catch (e) {
+        if (/Groq HTTP 429/.test(e.message)) {
+          return send(res, 429, {
+            error: String(e.message).slice(0, 500),
+            retryInSec: e.retryInSec || 10,
+          });
+        }
+        throw e;
+      }
+      return send(res, 200, {
+        title, subtitle, chars: text.length,
+        suggestions: result.suggestions, mode: result.mode,
+      });
     }
 
     // list drafts + published

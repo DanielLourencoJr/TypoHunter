@@ -326,6 +326,7 @@ a { color: var(--accent); }
   <span id="status" class="pill">pronto</span>
   <span class="spacer"></span>
   <button id="theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button>
+  <button id="go-admin" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Admin</button>
 </div>
 <main id="main" class="narrow" style="display:none">
 
@@ -440,6 +441,29 @@ a { color: var(--accent); }
     </div>
   </section>
 
+  <section class="view" id="v-admin">
+    <div class="card">
+      <h2><span class="step">A</span>Revisão avulsa (somente leitura)</h2>
+      <p class="hint">Puxe um post público de qualquer publicação ou cole um texto. Roda o mesmo motor de revisão do fluxo principal, mas sem aplicar nem publicar — ideal para textos de outros autores.</p>
+      <h3 style="font-family:var(--font-ui);font-size:13px;color:var(--muted)">Por publicação ou link do post</h3>
+      <div class="row">
+        <input id="adm-pub" type="text" size="40" placeholder="voce.substack.com ou https://…/p/slug" />
+        <button id="adm-list" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-stone-200 hover:bg-stone-300 dark:bg-stone-800 dark:hover:bg-stone-700 dark:text-stone-100">Listar posts</button>
+      </div>
+      <div id="adm-posts" class="libgrid" style="margin-top:10px"></div>
+      <h3 style="font-family:var(--font-ui);font-size:13px;color:var(--muted);margin-top:14px">Ou cole o texto</h3>
+      <textarea id="adm-text" rows="6" style="width:100%" placeholder="Cole aqui qualquer texto…"></textarea>
+      <div class="row" style="margin-top:8px">
+        <input id="adm-title" type="text" size="24" placeholder="Título (opcional)" />
+        <input id="adm-lang" type="text" size="12" placeholder="Idioma (opcional)" />
+        <button id="adm-analyze-text" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Analisar texto</button>
+      </div>
+      <div class="row" style="margin-top:12px"><span id="adm-status" class="hint"></span></div>
+      <div id="adm-result" style="margin-top:10px"></div>
+      <div class="err" id="err-adm"></div>
+    </div>
+  </section>
+
 </main>
 
 <div id="welcome">
@@ -485,7 +509,7 @@ function showView(name, push) {
   $('v-' + name).classList.add('on');
   $('topbar').style.display = '';
   $('main').style.display = '';
-  const narrow = ['profile', 'tutorial', 'dash', 'done'];
+  const narrow = ['profile', 'tutorial', 'dash', 'done', 'admin'];
   $('main').classList.toggle('narrow', narrow.includes(name));
   $('main').classList.toggle('centered', narrow.includes(name));
   $('back').style.display = NAV.length ? '' : 'none';
@@ -1146,6 +1170,61 @@ $('done-push').onclick = async () => {
     setStatus('pronto');
   } catch (e) { showErr(e.message, 'err-done'); $('done-push').disabled = false; }
 };
+
+/* ---------- admin: read-only review of public posts / pasted text ---------- */
+let ADM_HOST = '';
+$('go-admin').onclick = () => showView('admin');
+$('adm-list').onclick = async () => {
+  clearErrs();
+  const input = $('adm-pub').value.trim();
+  if (!input) return;
+  const pm = input.match(/^(?:https?:\/\/)?([^/]+)\/p\/([A-Za-z0-9_-]+)/);
+  if (pm) { admAnalyzePost(pm[1], pm[2]); return; }
+  $('adm-status').textContent = 'Buscando posts…';
+  $('adm-posts').innerHTML = '';
+  try {
+    const r = await fetch('/api/admin/archive?pub=' + encodeURIComponent(input));
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    ADM_HOST = j.host;
+    $('adm-status').textContent = `${j.posts.length} posts recentes de ${j.name}. Escolha um para analisar.`;
+    $('adm-posts').innerHTML = j.posts.map(p =>
+      `<div class="ver"><span class="vn">${esc(p.date || '…')}</span><span>${esc(p.title)} <button data-slug="${esc(p.slug)}" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Analisar</button></span></div>`).join('');
+    $('adm-posts').querySelectorAll('button').forEach(b => b.onclick = () => admAnalyzePost(ADM_HOST, b.dataset.slug));
+  } catch (e) { showErr(e.message, 'err-adm'); $('adm-status').textContent = ''; }
+};
+async function admAnalyzePost(host, slug) { admAnalyze({ pub: host, slug }, 'o post'); }
+$('adm-analyze-text').onclick = () => {
+  const text = $('adm-text').value;
+  if (!text.trim()) return;
+  admAnalyze({ text, title: $('adm-title').value.trim(), language: $('adm-lang').value.trim() || undefined }, 'o texto');
+};
+async function admAnalyze(payload, label) {
+  clearErrs();
+  $('adm-result').innerHTML = '';
+  $('adm-status').textContent = `Analisando ${label}… (textos longos vão em partes e podem levar minutos — aguarde)`;
+  try {
+    const r = await fetch('/api/admin/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const j = await r.json();
+    if (r.status === 429) {
+      let wait = (j && j.retryInSec) || 10;
+      const tick = () => {
+        if (wait <= 0) { admAnalyze(payload, label); return; }
+        $('adm-status').textContent = `Limite da IA atingido — tentando de novo em ${wait}s (automático)…`;
+        wait--;
+        setTimeout(tick, 1000);
+      };
+      tick();
+      return;
+    }
+    if (j.error) throw new Error(j.error);
+    $('adm-status').textContent = `${j.suggestions.length} sugestões · ${j.chars} caracteres · ${j.mode || ''} · somente leitura (nada é aplicado nem publicado).`;
+    $('adm-result').innerHTML = `<h3 style="font-family:var(--font-ui);font-size:14px;margin:10px 0 6px">${esc(j.title)}${j.subtitle ? ` — <span class="hint">${esc(j.subtitle)}</span>` : ''}</h3>` +
+      (j.suggestions.map((s, k) =>
+        `<div class="ver"><span class="vn">${k + 1}</span><span><s>${esc(s.original)}</s> → <strong>${esc(s.replacement)}</strong> <span class="tag">${esc(s.reason)}</span></span></div>`).join('') ||
+        '<p class="hint">Nenhuma correção necessária — texto limpo.</p>');
+  } catch (e) { showErr(e.message, 'err-adm'); $('adm-status').textContent = ''; }
+}
 
 /* ---------- boot ---------- */
 $('theme').onclick = toggleTheme;
