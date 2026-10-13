@@ -7,6 +7,7 @@ import { getDraft, listDrafts, listPublished, updateDraft, publishDraft, transla
 import { draftToMarkdown, tiptapToMarkdown } from "../SubstackCLI/lib/convert.js";
 import { parseFrontmatter, stringifyFrontmatter } from "../SubstackCLI/lib/frontmatter.js";
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
+import { htmlToMarkdown } from "../SubstackKit/lib/convert/html_to_md.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
@@ -132,22 +133,6 @@ async function publicationRef(host) {
   const data = await r.json().catch(() => null);
   if (!Array.isArray(data)) throw new Error("publication not found");
   return { kind: "publication", handle: host.split(".")[0], host, name: (await feedTitle(host)) || host };
-}
-
-// One-way HTML -> prose extraction for ANALYSIS ONLY. This never
-// round-trips (admin results are never applied or pushed), so a simple
-// tag strip is enough. Anchor text is kept, URLs are dropped, image
-// captions (figcaption) are kept as plain prose.
-function htmlToProse(html) {
-  let t = String(html || "");
-  t = t.replace(/<(script|style)[\s\S]*?<\/\1>/gi, "");
-  t = t.replace(/<br\s*\/?>/gi, "\n");
-  t = t.replace(/<\/(p|h1|h2|h3|h4|li|blockquote|div|tr|ul|ol|figcaption)>/gi, "\n\n");
-  t = t.replace(/<[^>]*>/g, "");
-  t = t.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/g, "'");
-  t = t.replace(/&#(\d+);/g, (m, n) => String.fromCharCode(Number(n)));
-  return t.split("\n").map((l) => l.trim()).filter(Boolean).join("\n\n").slice(0, 200000);
 }
 
 function send(res, code, obj) {  const body = JSON.stringify(obj);
@@ -496,7 +481,10 @@ const server = http.createServer(async (req, res) => {  try {
       if (!r.ok || !post || !post.body_html) return send(res, 404, { error: "post not found or paywalled" });
       const title = post.title || slug;
       const subtitle = post.subtitle || "";
-      const text = htmlToProse(post.body_html);
+      // Public HTML -> Markdown via SubstackKit's tested converter
+      // (analysis-only: admin results are never applied or pushed).
+      // Same input shape the writer flow sends, captions included.
+      const text = htmlToMarkdown(post.body_html).slice(0, 200000);
       if (!text.trim()) return send(res, 400, { error: "empty text" });
       const { masked: admMasked } = maskOpaque(text);
       const job = enqueueAnalysis("admin", splitChunks(admMasked).length, async (progress) => {

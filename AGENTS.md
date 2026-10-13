@@ -13,7 +13,11 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
   by evaluating the extracted script in node with DOM stubs
   (`document.querySelectorAll/getElementById`), never by copying functions.
 - Sibling lib reused via relative import: `../SubstackCLI/lib/{drafts,convert,md,frontmatter,auth}.js`.
-  Never reimplement converters; run node from this repo root so `../SubstackCLI` resolves.
+  Public-post HTML uses `../../SubstackKit/lib/convert/html_to_md.js` (tested,
+  captions preserved). Never reimplement converters; run node from this repo
+  root so `../SubstackCLI` resolves. SubstackKit is read-only by design — the
+  writer flow's authenticated writes stay in SubstackCLI; never route our SID
+  through `substack-api`-backed paths (third-party gateway).
 
 ## Credentials (never print, never commit)
 
