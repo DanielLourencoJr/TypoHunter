@@ -902,6 +902,12 @@ function renderLibrary() {
   document.querySelectorAll('.libcard').forEach(b => b.onclick = null);
   if (adm) {
     $('drafts').innerHTML = '<span class="hint">(rascunhos exigem acesso de contribuidor)</span>';
+    if (!j) {
+      $('pubd').innerHTML = '<span class="hint">(liste uma publicação acima)</span>';
+      $('lib-count').textContent = '';
+      $('more').style.display = 'none';
+      return;
+    }
     $('pubd').innerHTML = j.published.filter(match).map(libCard).join('') || '<span class="hint">(nenhum)</span>';
     document.querySelectorAll('.libcard').forEach(b => b.onclick = () => openHistory(b.dataset.id));
     $('lib-count').textContent = `${j.published.length} posts públicos`;
@@ -1349,18 +1355,26 @@ $('theme').onclick = toggleTheme;
 $('w-theme').onclick = toggleTheme;
 paintThemeBtn();
 (function boot() {
-  if (location.hash === '#admin') {
-    // Hidden route (no button): password gate, then the standard screens.
-    $('welcome').classList.remove('on');
-    let key = null;
-    try { key = sessionStorage.getItem('sdr_adm_key'); } catch {}
-    if (key) { S.admin = { key }; enterAdminLibrary(); }
-    else showView('admingate');
-    return;
-  }
+  if (location.hash === '#admin') { enterAdminRoute(); return; }
   document.body.classList.add('bare');
   $('welcome').classList.add('on');
 })();
+// Same-document navigation (typing the URL in an open tab) doesn't reload,
+// so route hash changes explicitly.
+window.addEventListener('hashchange', () => {
+  if (location.hash === '#admin') enterAdminRoute();
+});
+function enterAdminRoute() {
+  // Hidden route (no button): password gate, then the standard screens.
+  S.cur = null; // aborts any in-flight writer analysis loop
+  S.admin = null;
+  $('welcome').classList.remove('on');
+  document.body.classList.remove('bare');
+  let key = null;
+  try { key = sessionStorage.getItem('sdr_adm_key'); } catch {}
+  if (key) { S.admin = { key }; enterAdminLibrary(); }
+  else showView('admingate');
+}
 </script>
 </body>
 </html>
