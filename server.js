@@ -30,6 +30,24 @@ function loadEnv() {
 loadEnv();
 const PORT = Number(process.env.PORT || 5179);
 
+// Fresh .env read for values the operator may change while the server runs
+// (currently the admin password). Falls back to the process env.
+function envFresh(key) {
+  try {
+    for (const raw of fs.readFileSync(path.join(ROOT, ".env"), "utf8").split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq === -1) continue;
+      if (line.slice(0, eq).trim() !== key) continue;
+      let v = line.slice(eq + 1).trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+      return v;
+    }
+  } catch { /* missing .env: fall through */ }
+  return process.env[key] || "";
+}
+
 function sidFrom(req) {
   const h = req.headers["x-substack-sid"];
   if (h) return String(h);
@@ -342,15 +360,16 @@ const server = http.createServer(async (req, res) => {
     // ---- read-only admin review (public posts only: no SID, no store writes) ----
 
     // Password gate: ADMIN_PASSWORD env var. Unset = admin disabled entirely.
+    // Re-read from disk per request so .env edits apply without a restart.
     function adminStatus(req) {
-      const want = process.env.ADMIN_PASSWORD || "";
+      const want = envFresh("ADMIN_PASSWORD");
       if (!want) return "disabled";
       return req.headers["x-admin-key"] === want ? "ok" : "denied";
     }
     if (req.method === "POST" && url.pathname === "/api/admin/auth") {
-      if ((process.env.ADMIN_PASSWORD || "") === "") return send(res, 503, { error: "admin disabled" });
+      const want = envFresh("ADMIN_PASSWORD");
+      if (!want) return send(res, 503, { error: "admin disabled" });
       const body = await readJson(req);
-      const want = process.env.ADMIN_PASSWORD;
       const got = String(body.password || "");
       let ok = got.length === want.length;
       for (let i = 0; i < Math.max(got.length, want.length); i++) ok = ok && got[i] === want[i];
