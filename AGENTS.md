@@ -25,6 +25,10 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
   probes only, and never echo secret values into tool output (they land in logs).
 - Fresh-account SIDs get HTTP 403 with non-browser User-Agents (python-urllib);
   always validate with a browser UA or node fetch. A 403 alone means nothing.
+- Read-only admin lives at the hidden `#admin` route (no button), gated by
+  `ADMIN_PASSWORD` (unset = disabled). It reuses the library/history/review
+  screens with synthetic `adm:<slug>` ids that match no writer endpoint;
+  the review screen hides apply/finish, so nothing can be written back.
 - The user runs their own server on :5179. Test on other ports (`PORT=51xx`).
   Find strays with `ss -ltnp | grep <port>` + `kill <pid>` (`pkill` hangs here).
   Beware `A && B &` precedence — background the server in its own command and

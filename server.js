@@ -341,8 +341,27 @@ const server = http.createServer(async (req, res) => {
 
     // ---- read-only admin review (public posts only: no SID, no store writes) ----
 
+    // Password gate: ADMIN_PASSWORD env var. Unset = admin disabled entirely.
+    function adminStatus(req) {
+      const want = process.env.ADMIN_PASSWORD || "";
+      if (!want) return "disabled";
+      return req.headers["x-admin-key"] === want ? "ok" : "denied";
+    }
+    if (req.method === "POST" && url.pathname === "/api/admin/auth") {
+      if ((process.env.ADMIN_PASSWORD || "") === "") return send(res, 503, { error: "admin disabled" });
+      const body = await readJson(req);
+      const want = process.env.ADMIN_PASSWORD;
+      const got = String(body.password || "");
+      let ok = got.length === want.length;
+      for (let i = 0; i < Math.max(got.length, want.length); i++) ok = ok && got[i] === want[i];
+      if (!ok) return send(res, 401, { error: "bad password" });
+      return send(res, 200, { ok: true });
+    }
+
     // list recent public posts of any publication (no SID needed)
     if (req.method === "GET" && url.pathname === "/api/admin/archive") {
+      const st = adminStatus(req);
+      if (st !== "ok") return send(res, st === "disabled" ? 503 : 401, { error: "admin auth required" });
       const input = (url.searchParams.get("pub") || "").trim();
       if (!input) return send(res, 400, { error: "missing pub" });
       let ref;
@@ -364,42 +383,36 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // run the same review engine over a public post or pasted text.
-    // Ephemeral by design: never touches data/<id>/store.json, and the UI
-    // offers no apply/push (a non-contributor cannot write to the post).
+    // run the same review engine over a public post. Ephemeral by design:
+    // never touches data/<id>/store.json, and the UI offers no apply/push
+    // (a non-contributor cannot write to the post). The extracted prose is
+    // returned too so the read-only review screen renders with full context.
     if (req.method === "POST" && url.pathname === "/api/admin/analyze") {
+      const st = adminStatus(req);
+      if (st !== "ok") return send(res, st === "disabled" ? 503 : 401, { error: "admin auth required" });
       const body = await readJson(req);
-      let title = String(body.title || "").slice(0, 200);
-      let subtitle = "";
-      let text = "";
-      if (body.text) {
-        text = String(body.text).slice(0, 200000);
-        if (!title) title = "(pasted text)";
-      } else {
-        const pub = String(body.pub || "").trim();
-        const slug = String(body.slug || "").trim();
-        if (!pub || !/^[A-Za-z0-9_-]+$/.test(slug)) return send(res, 400, { error: "need pub + slug, or text" });
-        let ref;
-        try {
-          ref = await resolveSubstackRef(pub);
-        } catch {
-          return send(res, 404, { error: "publication not found" });
-        }
-        if (ref.kind !== "publication" || !ref.host) return send(res, 400, { error: "not a publication" });
-        const r = await fetch(`https://${ref.host}/api/v1/posts/${slug}`);
-        const post = await r.json().catch(() => null);
-        if (!r.ok || !post || !post.body_html) return send(res, 404, { error: "post not found or paywalled" });
-        title = post.title || slug;
-        subtitle = post.subtitle || "";
-        text = htmlToProse(post.body_html);
+      const pub = String(body.pub || "").trim();
+      const slug = String(body.slug || "").trim();
+      if (!pub || !/^[A-Za-z0-9_-]+$/.test(slug)) return send(res, 400, { error: "need pub + slug" });
+      let ref;
+      try {
+        ref = await resolveSubstackRef(pub);
+      } catch {
+        return send(res, 404, { error: "publication not found" });
       }
+      if (ref.kind !== "publication" || !ref.host) return send(res, 400, { error: "not a publication" });
+      const r = await fetch(`https://${ref.host}/api/v1/posts/${slug}`);
+      const post = await r.json().catch(() => null);
+      if (!r.ok || !post || !post.body_html) return send(res, 404, { error: "post not found or paywalled" });
+      const title = post.title || slug;
+      const subtitle = post.subtitle || "";
+      const text = htmlToProse(post.body_html);
       if (!text.trim()) return send(res, 400, { error: "empty text" });
       let result;
       try {
         result = await proofreadMarkdown(text, {
           apiKey: process.env.GROQ_API_KEY,
           model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-          language: body.language || undefined,
         });
       } catch (e) {
         if (/Groq HTTP 429/.test(e.message)) {
@@ -411,7 +424,7 @@ const server = http.createServer(async (req, res) => {
         throw e;
       }
       return send(res, 200, {
-        title, subtitle, chars: text.length,
+        title, subtitle, chars: text.length, text,
         suggestions: result.suggestions, mode: result.mode,
       });
     }
