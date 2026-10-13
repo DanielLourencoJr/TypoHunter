@@ -70,6 +70,11 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
   re-read on every analysis, so prompt edits need no restart. Media placeholder
   wording lives in `prompts/media.yaml` (no model-facing strings in code).
   Verify prompt changes with the clean control (clean PT text must return `[]`).
+- Analyses run through a server-side FIFO job queue (one at a time, protects
+  the TPM budget): POST proofread/analyze answers 202 `{jobId, position,
+  etaSec}`; clients poll `GET /api/jobs/:id` (queued/running/done/error +
+  chunk progress). ETA self-calibrates from completed jobs. Queue is
+  in-memory — a restart drops it, clients re-enqueue via their retry path.
 - Never write literal NUL bytes in JS regex source (they mangle to U+FFFD);
   always use the `\u0000` escape.
 - `node --check` catches syntax only; re-read edited regions for dropped

@@ -984,13 +984,19 @@ function renderHistory(j) {
     return `<div class="ver ${o.cls}"><span class="vn">v${v.n}</span><span>${esc(v.note)} <span class="hint">${(v.createdAt || '').slice(0, 16).replace('T', ' ')}</span><span class="tag">${o.label}</span>${marks}</span></div>`;
   }).join('') + `<p class="hint">O texto não é exibido aqui de propósito — revise só na próxima tela.</p>`;
 }
+function fmtEta(s) {
+  s = Math.max(0, Math.round(s || 0));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60), rest = s % 60;
+  return rest ? `${m}min ${rest}s` : `${m}min`;
+}
 async function analyzeInBackground() {
   const cur = S.cur;
   cur.sugState = 'working';
   $('h-advance').disabled = true;
-  $('h-status').textContent = 'Enviando versão atual para análise… (textos longos vão em partes e podem levar vários minutos — aguarde, a tela se atualiza sozinha)';
+  $('h-status').textContent = 'Entrando na fila de análise…';
+  const adm = cur.readonly && cur.admin;
   try {
-    const adm = cur.readonly && cur.admin;
     const r = adm
       ? await fetch('/api/admin/analyze',
         { method: 'POST', headers: { ...AH(), 'Content-Type': 'application/json' }, body: JSON.stringify({ pub: cur.admin.host, slug: cur.admin.slug }) })
@@ -999,45 +1005,79 @@ async function analyzeInBackground() {
     const j = await r.json();
     if (cur !== S.cur) return; // usuário trocou de texto no meio
     if (r.status === 401 && adm) { S.admin = null; showView('admingate'); return; }
-    if (r.status === 429) {
-      // Rate limit: espera automática — clicar de novo só reinicia o bloqueio.
-      cur.sugState = 'rate';
-      let wait = (j && j.retryInSec) || 10;
-      const tick = () => {
-        if (cur !== S.cur) return;
-        if (wait <= 0) { analyzeInBackground(); return; }
-        $('h-status').textContent = `Limite da IA atingido — tentando de novo em ${wait}s (não clique, a espera é automática)…`;
-        wait--;
-        setTimeout(tick, 1000);
-      };
-      tick();
-      return;
-    }
     if (j.error) throw new Error(j.error);
-    if (cur.readonly) {
-      // Admin: the server returns the extracted prose — anchor the synthetic
-      // version to it so the review screen renders with full context.
-      cur.store.versions[cur.store.versions.length - 1].md = j.text || '';
-      cur.title = j.title || cur.title;
-    }
-    cur.sugs = j.suggestions || [];
-    cur.sugState = 'ready';
-    // mantém sugestões aplicáveis; descarta as obsoletas silenciosamente aqui
-    const md = cur.store.versions[cur.store.versions.length - 1].md;
-    const fresh = cur.sugs.filter(s => s.original === '  (double space)' ? /[^ ]  +[^ ]/.test(md) : md.includes(s.original));
-    cur.dropped = cur.sugs.length - fresh.length;
-    cur.sugs = fresh;
-    $('h-status').textContent = cur.sugs.length
-      ? `${cur.sugs.length} sugestões prontas${cur.dropped ? ` (${cur.dropped} ignoradas: texto mudou)` : ''}.`
-      : 'Nenhuma correção necessária — texto limpo.';
-    $('h-advance').disabled = false;
-    $('h-advance').textContent = 'Avançar para revisão';
+    if (!j.jobId) throw new Error('queue error');
+    await pollAnalysisJob(cur, j.jobId, adm);
   } catch (e) {
     if (cur !== S.cur) return;
     cur.sugState = 'error';
     $('h-status').innerHTML = `Falha na análise: ${esc(e.message)} <button id="h-retry" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-stone-200 hover:bg-stone-300 dark:bg-stone-800 dark:hover:bg-stone-700 dark:text-stone-100">Tentar de novo</button>`;
     $('h-retry').onclick = analyzeInBackground;
   }
+}
+// Polls GET /api/jobs/:id until the queued analysis finishes. Everyone
+// shares one FIFO queue, so the position/ETA here reflect all waiters.
+async function pollAnalysisJob(cur, jobId, adm) {
+  for (;;) {
+    await new Promise(r => setTimeout(r, 2500));
+    if (cur !== S.cur) return;
+    let j;
+    try {
+      const r = await fetch('/api/jobs/' + jobId, { headers: adm ? AH() : H() });
+      j = await r.json();
+    } catch { continue; }
+    if (cur !== S.cur) return;
+    if (j.error && !j.status) throw new Error(j.error);
+    if (j.status === 'queued') {
+      cur.sugState = 'queued';
+      $('h-status').textContent = j.position > 1
+        ? `Na fila: posição ${j.position} · espera estimada ~${fmtEta(j.etaSec)}…`
+        : `Na fila: próxima análise · ~${fmtEta(j.etaSec)}…`;
+    } else if (j.status === 'running') {
+      cur.sugState = 'working';
+      const parts = j.estChunks > 1 ? ` · parte ${Math.min(j.doneChunks + 1, j.estChunks)}/${j.estChunks}` : '';
+      $('h-status').textContent = `Analisando…${parts} · ~${fmtEta(j.etaSec)} restantes…`;
+    } else if (j.status === 'done') {
+      handleAnalysisResult(cur, j.result || {});
+      return;
+    } else if (j.status === 'error') {
+      if (j.retryInSec) {
+        // Quota still exhausted after server-side retries: wait, re-enqueue.
+        cur.sugState = 'rate';
+        let wait = j.retryInSec;
+        const tick = () => {
+          if (cur !== S.cur) return;
+          if (wait <= 0) { analyzeInBackground(); return; }
+          $('h-status').textContent = `Limite da IA — tentando de novo em ${wait}s (automático)…`;
+          wait--;
+          setTimeout(tick, 1000);
+        };
+        tick();
+        return;
+      }
+      throw new Error(j.error || 'analysis failed');
+    }
+  }
+}
+function handleAnalysisResult(cur, j) {
+  if (cur.readonly) {
+    // Admin: the server returns the extracted prose — anchor the synthetic
+    // version to it so the review screen renders with full context.
+    cur.store.versions[cur.store.versions.length - 1].md = j.text || '';
+    cur.title = j.title || cur.title;
+  }
+  cur.sugs = j.suggestions || [];
+  cur.sugState = 'ready';
+  // mantém sugestões aplicáveis; descarta as obsoletas silenciosamente aqui
+  const md = cur.store.versions[cur.store.versions.length - 1].md;
+  const fresh = cur.sugs.filter(s => s.original === '  (double space)' ? /[^ ]  +[^ ]/.test(md) : md.includes(s.original));
+  cur.dropped = cur.sugs.length - fresh.length;
+  cur.sugs = fresh;
+  $('h-status').textContent = cur.sugs.length
+    ? `${cur.sugs.length} sugestões prontas${cur.dropped ? ` (${cur.dropped} ignoradas: texto mudou)` : ''}.`
+    : 'Nenhuma correção necessária — texto limpo.';
+  $('h-advance').disabled = false;
+  $('h-advance').textContent = 'Avançar para revisão';
 }
 $('h-advance').onclick = () => { renderReview(false); showView('review'); };
 

@@ -299,6 +299,70 @@ function edStore(store, edition, md) {
   return store.editions[edition];
 }
 
+// ---- analysis job queue: FIFO, one at a time, with live ETA ----
+// Serializing analyses also protects the Groq per-minute token budget:
+// concurrent full-text requests used to 429 each other. In-memory only —
+// a restart drops queued jobs (clients re-enqueue on their retry path).
+const jobs = new Map();
+let jobSeq = 0;
+let queueRunning = false;
+let secPerChunk = 12; // calibrated by completed jobs (exponential moving average)
+function enqueueAnalysis(kind, estChunks, run) {
+  const job = {
+    id: "j" + (++jobSeq), kind, run, status: "queued", enqueuedAt: Date.now(),
+    estChunks: Math.max(1, estChunks), doneChunks: 0,
+    result: null, error: null, retryInSec: 0, finishedAt: 0,
+  };
+  jobs.set(job.id, job);
+  for (const [jid, j] of jobs) {
+    if ((j.status === "done" || j.status === "error") && Date.now() - j.finishedAt > 10 * 60 * 1000) jobs.delete(jid);
+  }
+  pumpQueue();
+  return job;
+}
+function queueAhead(job) {
+  let aheadChunks = 0;
+  let position = 1;
+  for (const j of jobs.values()) {
+    if (j.id === job.id) break;
+    if (j.status === "queued" || j.status === "running") {
+      aheadChunks += Math.max(0, j.estChunks - j.doneChunks);
+      position++;
+    }
+  }
+  return { aheadChunks, position };
+}
+function jobEtaSec(job) {
+  const { aheadChunks } = queueAhead(job);
+  const own = Math.max(0, job.estChunks - job.doneChunks);
+  return Math.max(5, Math.round((aheadChunks + own) * secPerChunk));
+}
+async function pumpQueue() {
+  if (queueRunning) return;
+  queueRunning = true;
+  try {
+    for (;;) {
+      const next = [...jobs.values()].find((j) => j.status === "queued");
+      if (!next) break;
+      next.status = "running";
+      next.startedAt = Date.now();
+      try {
+        next.result = await next.run((done) => { next.doneChunks = Math.max(next.doneChunks, done); });
+        next.status = "done";
+        const elapsed = (Date.now() - next.startedAt) / 1000;
+        secPerChunk = secPerChunk * 0.7 + (elapsed / Math.max(1, next.doneChunks || next.estChunks)) * 0.3;
+      } catch (e) {
+        next.status = "error";
+        next.error = String((e && e.message) || e).slice(0, 500);
+        next.retryInSec = (e && e.retryInSec) || 0;
+      }
+      next.finishedAt = Date.now();
+    }
+  } finally {
+    queueRunning = false;
+  }
+}
+
 const server = http.createServer(async (req, res) => {  try {
     const url = new URL(req.url, "http://localhost");
     // static (never cached: the UI evolves fast during testing)
@@ -426,25 +490,20 @@ const server = http.createServer(async (req, res) => {  try {
       const subtitle = post.subtitle || "";
       const text = htmlToProse(post.body_html);
       if (!text.trim()) return send(res, 400, { error: "empty text" });
-      let result;
-      try {
-        result = await proofreadMarkdown(text, {
+      const { masked: admMasked } = maskOpaque(text);
+      const job = enqueueAnalysis("admin", splitChunks(admMasked).length, async (progress) => {
+        const result = await proofreadMarkdown(text, {
           apiKey: process.env.GROQ_API_KEY,
           model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+          onUsage: (u) => progress(u.chunk),
         });
-      } catch (e) {
-        if (/Groq HTTP 429/.test(e.message)) {
-          return send(res, 429, {
-            error: String(e.message).slice(0, 500),
-            retryInSec: e.retryInSec || 10,
-          });
-        }
-        throw e;
-      }
-      return send(res, 200, {
-        title, subtitle, chars: text.length, text,
-        suggestions: result.suggestions, mode: result.mode,
+        return {
+          title, subtitle, chars: text.length, text,
+          suggestions: result.suggestions, mode: result.mode,
+        };
       });
+      const { position: admPosition } = queueAhead(job);
+      return send(res, 202, { jobId: job.id, position: admPosition, etaSec: jobEtaSec(job) });
     }
 
     // list drafts + published
@@ -553,38 +612,57 @@ const server = http.createServer(async (req, res) => {  try {
       });
     }
 
-    // proofread latest version (per edition, in that edition's language)
+    // proofread latest version (per edition, in that edition's language).
+    // Enqueues a job and returns 202 immediately — the client polls
+    // GET /api/jobs/:id for position/ETA/progress. The store is reloaded
+    // inside the worker so back-to-back analyses never clobber each other.
     const mProof = url.pathname.match(/^\/api\/posts\/(\d+)\/proofread$/);
     if (req.method === "POST" && mProof) {
       const body = await readJson(req);
       const id = mProof[1];
       const edition = editionParam(url, body);
+      const language = body.language || (edition === "original" ? null : edition);
       const store = loadStore(id);
       const es = store?.editions?.[edition];
       if (!es) return send(res, 404, { error: "open the post edition first (GET /api/posts/:id?edition=…)" });
       const md = latestMarkdown(es);
-      let result;
-      try {
-        result = await proofreadMarkdown(md, {
+      const { masked } = maskOpaque(md);
+      const job = enqueueAnalysis("proofread", splitChunks(masked).length, async (progress) => {
+        const result = await proofreadMarkdown(md, {
           apiKey: process.env.GROQ_API_KEY,
           model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-          language: body.language || (edition === "original" ? null : edition),
+          language,
+          onUsage: (u) => progress(u.chunk),
         });
-      } catch (e) {
-        // surface Groq rate limits as 429 (with retry hint) instead of generic 500
-        if (/Groq HTTP 429/.test(e.message)) {
-          return send(res, 429, {
-            error: String(e.message).slice(0, 500),
-            retryInSec: e.retryInSec || 10,
-          });
-        }
-        throw e;
+        const fresh = loadStore(id);
+        const fes = fresh?.editions?.[edition];
+        if (!fes) throw new Error("store vanished mid-analysis");
+        fes.suggestions = result.suggestions;
+        fes.mode = result.mode;
+        saveStore(id, fresh);
+        return { suggestions: result.suggestions, mode: result.mode, baseVersion: fes.versions.length - 1 };
+      });
+      const { position } = queueAhead(job);
+      return send(res, 202, { jobId: job.id, position, etaSec: jobEtaSec(job) });
+    }
+
+    // analysis job status (position in queue, ETA, chunk progress, result)
+    const mJob = url.pathname.match(/^\/api\/jobs\/(j\d+)$/);
+    if (req.method === "GET" && mJob) {
+      const job = jobs.get(mJob[1]);
+      if (!job) return send(res, 404, { error: "unknown job" });
+      const finished = job.status === "done" || job.status === "error";
+      const { position } = finished ? { position: 0 } : queueAhead(job);
+      const out = {
+        status: job.status, position, etaSec: finished ? 0 : jobEtaSec(job),
+        doneChunks: job.doneChunks, estChunks: job.estChunks,
+      };
+      if (job.status === "done") out.result = job.result;
+      if (job.status === "error") {
+        out.error = job.error;
+        if (job.retryInSec) out.retryInSec = job.retryInSec;
       }
-      const { suggestions, mode } = result;
-      es.suggestions = suggestions;
-      es.mode = mode;
-      saveStore(id, store);
-      return send(res, 200, { suggestions, mode, baseVersion: es.versions.length - 1 });
+      return send(res, 200, out);
     }
 
     // apply accepted suggestions -> new version
