@@ -424,6 +424,7 @@ const server = http.createServer(async (req, res) => {
         title: edition === "original" ? draft.draft_title || draft.title : ed?.title,
         subtitle: draft.draft_subtitle,
         isPublished: !!draft.is_published,
+        cover: draft.cover_image || null,
         editorUrl: cleanPub ? `https://${cleanPub}/publish/post/${id}` : null,
         translations,
         store: es,
@@ -527,7 +528,19 @@ const server = http.createServer(async (req, res) => {
         // Published posts: updateDraft alone only edits the draft copy — live page
         // stays unchanged until republish. Require explicit opt-in (checkbox in UI).
         if (body.republish) {
-          await publishDraft({ sid, publicationUrl: pub, id, send: false, shareAutomatically: false });
+          try {
+            await publishDraft({ sid, publicationUrl: pub, id, send: false, shareAutomatically: false });
+          } catch (e) {
+            if (/escolha uma seção|choose a section/i.test(String(e.message))) {
+              const cleanPub = String(pub).replace(/^https?:\/\//, "");
+              return send(res, 409, {
+                error: "A revisão foi salva no rascunho, mas o Substack rejeitou a republicação porque não recebeu a seção do post. O revisor agora preserva a seção existente; se esta tentativa a apagou, abra o editor, selecione a seção novamente e tente atualizar.",
+                stage: "republish",
+                editorUrl: `https://${cleanPub}/publish/post/${id}`,
+              });
+            }
+            throw e;
+          }
           republished = true;
         }
       } else {

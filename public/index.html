@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Revisor de Rascunhos — Substack</title>
-<script>try{var t=localStorage.getItem('sdr_theme')||'dark';document.documentElement.dataset.theme=t;if(t==='dark')document.documentElement.classList.add('dark');}catch(e){document.documentElement.dataset.theme='dark';document.documentElement.classList.add('dark');}</script>
+<script>try{var t=localStorage.getItem('sdr_theme')||'light';document.documentElement.dataset.theme=t;if(t==='dark')document.documentElement.classList.add('dark');}catch(e){document.documentElement.dataset.theme='light';}</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
@@ -103,6 +103,9 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 .doc pre code{background:none;padding:0}
 .doc hr{border:none;border-top:1px solid var(--line);margin:1.2em 0}
 .doc img{max-width:100%;border-radius:8px}
+.doc figure, .doc .doc-image { margin: 1.6em 0; text-align: center; }
+.doc img { display: block; width: auto; max-width: 100%; max-height: 680px; height: auto; margin: 0 auto; object-fit: contain; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.14); }
+.doc figcaption, .doc .image-caption { margin-top: 9px; color: var(--muted); font: 12px/1.5 var(--font-ui); text-align: center; }
 .meta{font-family:var(--font-ui);font-size:13px;color:var(--muted);background:var(--soft);border-radius:8px;padding:8px 12px;margin-bottom:10px}
 .diff{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:.7em 0;font-size:15px;line-height:1.65;background:var(--card)}
 .dold,.dnew{padding:6px 10px;display:flex;gap:8px;word-break:break-word}
@@ -140,6 +143,180 @@ details{font-family:var(--font-ui);font-size:13px;color:var(--muted);margin-top:
 .stickybar{position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:5;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .done-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--ink);background:transparent;color:var(--ink);text-decoration:none;display:inline-block}
+</style>
+<style>
+/* A quieter editorial surface for the existing review flow. */
+:root {
+  color-scheme: light;
+  --bg: #f5f2ec;
+  --card: #fffefa;
+  --ink: #282720;
+  --muted: #79766e;
+  --line: #e7e2d8;
+  --accent: #b64a2b;
+  --accent-bg: #f9e9e1;
+  --green: #28704d;
+  --green-bg: #e8f3eb;
+  --red: #a83c37;
+  --red-bg: #f8e9e7;
+  --radius: 18px;
+  --soft: #f3f0e9;
+  --dold: #faece9;
+  --dnew: #eaf4ec;
+  --hlob: #efc3bb;
+  --hloi: #63261e;
+  --hlnb: #b9dec6;
+  --hlni: #194a30;
+  --warnbg: #f8efcf;
+  --warnink: #745719;
+  --onink: #fffefa;
+  --codebg: #282720;
+  --codeink: #f6f2e9;
+  --shadow: 0 1px 2px rgba(40,39,32,.04);
+  --dlgshadow: 0 24px 80px rgba(40,39,32,.18);
+  --cardbd: #e8e2d7;
+  --cardshadow: 0 2px 4px rgba(40,39,32,.025), 0 16px 44px rgba(40,39,32,.045);
+  --font-text: 'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Source Serif Pro',serif;
+  --font-ui: system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --font-mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #171714;
+  --card: #201f1a;
+  --ink: #f0ecdf;
+  --muted: #aaa69a;
+  --line: #39372e;
+  --accent: #e58a68;
+  --accent-bg: #38251e;
+  --green: #83c69d;
+  --green-bg: #1e3025;
+  --red: #e58a82;
+  --red-bg: #382220;
+  --soft: #292820;
+  --dold: #382220;
+  --dnew: #1e3025;
+  --hlob: #794239;
+  --hloi: #ffe4dc;
+  --hlnb: #315d40;
+  --hlni: #e1f4e6;
+  --warnbg: #392f19;
+  --warnink: #efcf7d;
+  --onink: #171714;
+  --codebg: #11110f;
+  --codeink: #f0ecdf;
+  --shadow: 0 1px 2px rgba(0,0,0,.28);
+  --dlgshadow: 0 24px 80px rgba(0,0,0,.55);
+  --cardbd: #3b3930;
+  --cardshadow: 0 2px 5px rgba(0,0,0,.2), 0 18px 50px rgba(0,0,0,.15);
+}
+html { min-height: 100%; background: var(--bg); }
+body { min-height: 100vh; padding: 0 28px 80px; background: radial-gradient(ellipse at 50% -20%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 46%), var(--bg); }
+body.bare { padding: 0; }
+.topbar { max-width: 1160px; min-height: 76px; margin: 0 auto 32px; padding: 15px 0; gap: 16px; border-bottom: 1px solid var(--line); }
+.topbar h1 { display: flex; align-items: baseline; gap: 12px; font-size: 17px; font-weight: 720; letter-spacing: -.035em; }
+.topbar h1::before { content: "S"; display: inline-grid; place-items: center; width: 34px; height: 34px; align-self: center; border-radius: 11px 11px 11px 4px; background: var(--accent); color: #fffefa; font-family: var(--font-text); font-size: 21px; font-weight: 500; }
+.topbar h1 small { font-size: 12px; letter-spacing: 0; color: var(--muted); }
+.topbar .spacer { flex: 1; }
+main { max-width: 920px; gap: 20px; }
+main.narrow { max-width: 760px; }
+main.centered { min-height: min(72vh, 760px); justify-content: center; }
+.view.on { gap: 18px; }
+.card { padding: clamp(22px, 4vw, 38px); border: 1px solid var(--cardbd); border-radius: 22px; background: var(--card); box-shadow: var(--cardshadow); }
+.card h2 { margin-bottom: 18px; color: var(--ink); font-size: 11px; font-weight: 700; letter-spacing: .12em; }
+.card h2 .step { width: 26px; height: 26px; line-height: 26px; margin-right: 9px; background: var(--soft); color: var(--accent); font-size: 11px; }
+.hint, .card p.hint { color: var(--muted); line-height: 1.6; }
+.row { gap: 12px; }
+input[type=text], select { min-height: 44px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); padding: 10px 13px; outline: none; transition: border-color .16s, box-shadow .16s; }
+input[type=text]:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+button, a.btnlink { font-family: var(--font-ui); cursor: pointer; }
+button[class*="bg-orange-600"] { border: 1px solid var(--accent); border-radius: 11px; background: var(--accent); color: #fffefa; box-shadow: 0 3px 8px color-mix(in srgb, var(--accent) 20%, transparent); font-weight: 650; }
+button[class*="bg-orange-600"]:hover { filter: brightness(.94); transform: translateY(-1px); }
+button[class*="bg-stone-200"] { border: 1px solid var(--line); border-radius: 11px; background: var(--soft); color: var(--ink); }
+button { transition: background .16s, border-color .16s, transform .16s, box-shadow .16s; }
+button:disabled { cursor: not-allowed; opacity: .52; transform: none !important; }
+.pill { border-color: color-mix(in srgb, var(--green) 22%, var(--line)); padding: 5px 11px; background: var(--green-bg); font-size: 11px; font-weight: 650; letter-spacing: .02em; }
+.pill::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 7px 1px 0; border-radius: 50%; background: currentColor; }
+.pill.busy::before { animation: pulse 1s infinite alternate; }
+@keyframes pulse { to { opacity: .3; } }
+#welcome { background: color-mix(in srgb, var(--bg) 84%, transparent); backdrop-filter: blur(14px); }
+.dialog { width: min(100%, 580px); padding: clamp(30px, 6vw, 54px); border: 1px solid var(--cardbd); border-radius: 26px; background: var(--card); box-shadow: var(--dlgshadow); }
+.dialog > p:first-child { color: var(--accent); font-weight: 700; }
+.dialog h1 { font-size: clamp(31px, 5vw, 46px); letter-spacing: -.045em; line-height: 1.05; }
+.dialog p { max-width: 430px; margin: 15px auto 24px; line-height: 1.75; }
+.dialog button { min-height: 48px; }
+.libgrid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr)); gap: 14px; }
+.libcard { border-color: var(--cardbd); border-radius: 15px; background: var(--card); box-shadow: 0 2px 8px rgba(40,39,32,.035); }
+.libcard:hover { border-color: var(--accent); box-shadow: var(--cardshadow); }
+.libcard img.cover { height: 142px; }
+.libcard .nocover { height: 100px; background: linear-gradient(145deg, var(--soft), color-mix(in srgb, var(--accent) 8%, var(--soft))); }
+.libcard .pad { padding: 14px 15px 16px; }
+.libcard h4 { font-size: 17px; line-height: 1.35; }
+.libcard small { color: var(--muted); }
+.stats { margin-top: 12px; gap: 12px; }
+.doc { max-width: 720px; font-size: 18px; line-height: 1.85; }
+.doc h1, .doc h2, .doc h3 { letter-spacing: -.025em; }
+.doc h1 { font-size: 2em; }
+.doc a { color: var(--accent); text-underline-offset: 3px; }
+.meta { border: 1px solid var(--line); background: var(--soft); }
+.stickybar { top: 0; margin: -4px 0 25px; padding: 12px 0 15px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--card) 92%, transparent); backdrop-filter: blur(12px); }
+.stickybar button, .done-actions button, .done-actions a { min-height: 42px; }
+#rv-count { margin-left: auto; font-size: 12px; }
+.sugwidget { padding: 10px; border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--line)); border-left: 3px solid var(--accent); border-radius: 13px; background: color-mix(in srgb, var(--accent-bg) 28%, var(--card)); }
+.sugwidget.dec-y { border-color: var(--green); background: color-mix(in srgb, var(--green-bg) 45%, var(--card)); }
+.sugwidget.dec-n { opacity: .58; }
+.hunkhead { margin: 2px 0 7px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.diff { border: 0; border-radius: 9px; font-size: 14px; }
+.dold, .dnew { padding: 7px 10px; border-radius: 7px; }
+.dnew { margin-top: 3px; border: 0; }
+.decbar { margin-top: 10px; }
+.decbar button { min-height: 34px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }
+.decbar .btn-y { border-color: var(--green); background: var(--green); color: #fff; }
+.decbar .btn-n { border-color: var(--line); color: var(--muted); }
+.tabs { gap: 7px; }
+.tabs button { border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); }
+.tabs button:hover { border-color: var(--accent); color: var(--accent); }
+.tabs button.active { border-color: var(--ink); background: var(--ink); color: var(--card); }
+.ver { padding: 12px 5px; }
+.history-cover { width: 100%; max-height: 290px; margin: 0 0 20px; border: 1px solid var(--line); border-radius: 15px; background: var(--soft); object-fit: cover; object-position: center 42%; }
+.sugwidget.grouped { border-left-width: 4px; padding: 13px; }
+.grouped .diff { margin: 0; }
+.grouped .dold, .grouped .dnew { line-height: 1.7; white-space: pre-wrap; }
+.diff button.change-fragment { appearance: none; display: inline; min-height: 0; padding: 0 2px; border: 0; border-radius: 3px; background: transparent; color: inherit; font: inherit; line-height: inherit; vertical-align: baseline; }
+.diff button.change-fragment.hl-old { background: var(--hlob); color: var(--hloi); font-weight: 700; }
+.diff button.change-fragment.hl-new { background: var(--hlnb); color: var(--hlni); font-weight: 700; }
+.diff button.change-fragment:hover, .diff button.change-fragment:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.diff button.change-fragment.unselected { background: var(--soft); color: var(--muted); text-decoration: line-through; }
+.err { border-radius: 11px; }
+.mock { border-radius: 12px; }
+.tutstep { margin: 20px 0; }
+.tutn { background: var(--accent); color: #fff; }
+a { color: var(--accent); }
+.btnlink { border-color: var(--line) !important; border-radius: 11px !important; }
+#v-done .card { padding-top: 48px; padding-bottom: 48px; }
+#v-done h2 { justify-content: center; }
+#v-done .done-actions { gap: 10px; }
+@media (max-width: 640px) {
+  body { padding: 0 15px 40px; }
+  .topbar { min-height: 64px; margin-bottom: 22px; gap: 9px; }
+  .topbar h1 { font-size: 15px; }
+  .topbar h1::before { width: 30px; height: 30px; }
+  .topbar h1 small { display: none; }
+  #status { order: 3; }
+  .topbar .spacer { display: none; }
+  #theme { margin-left: auto; }
+  .card { padding: 22px 18px; border-radius: 17px; }
+  .row > input[type=text] { width: 100%; }
+  .stickybar { gap: 7px; }
+  .stickybar button { padding: 8px 10px; font-size: 12px; }
+  #rv-count { width: 100%; margin: 0; }
+  .doc { font-size: 16px; }
+  .done-actions { flex-direction: column; }
+  .done-actions > * { width: 100%; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
 </style>
 </head>
 <body>
@@ -224,6 +401,7 @@ a.btnlink{font-family:var(--font-ui);font-size:14px;padding:8px 14px;border-radi
   <section class="view" id="v-history">
     <div class="card">
       <h2><span class="step">4</span><span id="h-title">Histórico</span></h2>
+      <img id="h-cover" class="history-cover" alt="" style="display:none" />
       <div class="tabs" id="edtabs" style="display:none"></div>
       <div id="h-list"></div>
       <div class="row" style="margin-top:12px">
@@ -293,7 +471,7 @@ function toggleTheme() {
   try { localStorage.setItem('sdr_theme', next); } catch {}
   paintThemeBtn();
 }
-const S = { ref: null, pub: '', posts: null, cur: null, decisions: {}, editorUrl: null, isPublished: false, lastApplied: 0 };
+const S = { ref: null, pub: '', posts: null, cur: null, decisions: {}, groupDeselect: new Set(), editorUrl: null, isPublished: false, lastApplied: 0 };
 function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = 'pill' + (cls ? ' ' + cls : ''); }
 function showErr(m, where) { const el = $(where); if (el) { el.style.display = 'block'; el.textContent = m; } setStatus('erro', 'err'); }
 function clearErrs() { document.querySelectorAll('.err').forEach(e => { e.style.display = 'none'; e.textContent = ''; }); }
@@ -368,13 +546,18 @@ function restoreMedia(html, chips) {
   return html.replace(/\u0000MEDIA(\d+)\u0000/g, (m, n) => chips[Number(n)] ?? m);
 }
 function renderInline(s) {
+  const images = [];
+  s = String(s).replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (m, alt, src, title) => {
+    const i = images.push(`<figure class="doc-image"><img alt="${esc(alt)}" src="${esc(src)}"${title ? ` title="${esc(title)}"` : ''} />${title ? `<figcaption>${esc(title)}</figcaption>` : ''}</figure>`) - 1;
+    return `\u0000INLINEIMG${i}\u0000`;
+  });
   s = esc(s);
-  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, '<img alt="$1" src="$2" />');
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
   s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   s = s.replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  s = s.replace(/\u0000INLINEIMG(\d+)\u0000/g, (m, i) => images[Number(i)] ?? m);
   return s;
 }
 function renderMarkdown(src) {
@@ -393,6 +576,7 @@ function renderMarkdown(src) {
     if (inCode) { codeBuf.push(line); i++; continue; }
     if (/^\s*$/.test(line)) { closeList(); i++; continue; }
     let m;
+    if (/^!\[[^\]]*\]\([^)]+\)$/.test(line)) { closeList(); html += renderInline(line); i++; continue; }
     if ((m = line.match(/^(#{1,6})\s+(.*)/))) { closeList(); html += `<h${m[1].length}>${renderInline(m[2])}</h${m[1].length}>`; i++; continue; }
     if (/^---+\s*$/.test(line) || /^\*\*\*+\s*$/.test(line)) { closeList(); html += '<hr/>'; i++; continue; }
     if ((m = line.match(/^>\s?(.*)/))) { closeList(); const q = []; while (i < lines.length && /^>\s?/.test(lines[i])) q.push(lines[i].replace(/^>\s?/, '')), i++; html += `<blockquote>${q.map(renderInline).join('<br/>')}</blockquote>`; continue; }
@@ -441,6 +625,81 @@ function diffBlock(h, reason, idx) {
   return `${idx != null ? `<div class="hunkhead">correção ${idx}${reason ? ` · ${esc(reason)}` : ''}</div>` : ''}` +
     `<div class="diff"><div class="dold"><span class="sign">−</span><span>${h.oldHtml}</span></div>` +
     `<div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div></div>`;
+}
+function paragraphRanges(md) {
+  const lines = String(md).split('\n');
+  const ranges = [];
+  let i = 0;
+  while (i < lines.length) {
+    while (i < lines.length && !lines[i].trim()) i++;
+    if (i >= lines.length) break;
+    const start = i;
+    while (i < lines.length && lines[i].trim()) i++;
+    const end = i - 1;
+    const text = lines.slice(start, end + 1).join('\n');
+    const startPos = lines.slice(0, start).join('\n').length + (start ? 1 : 0);
+    ranges.push({ index: ranges.length, start, end, startPos, endPos: startPos + text.length, text });
+  }
+  return ranges;
+}
+function minimalChangePair(before, after) {
+  let start = 0;
+  while (start < before.length && start < after.length && before[start] === after[start]) start++;
+  let suffix = 0;
+  while (suffix < before.length - start && suffix < after.length - start && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix++;
+  if (start === before.length && start === after.length) start = Math.max(0, start - 1);
+  let oldEnd = before.length - suffix;
+  let newEnd = after.length - suffix;
+  if (start === oldEnd || start === newEnd) {
+    const prior = before.slice(0, start).match(/\S+$/);
+    if (prior) start -= prior[0].length;
+    else {
+      const following = before.slice(oldEnd).match(/^\S+/);
+      if (following) { suffix = Math.max(0, suffix - following[0].length); oldEnd = before.length - suffix; newEnd = after.length - suffix; }
+    }
+  }
+  return { oldStart: start, oldEnd, newStart: start, newEnd };
+}
+function inlineChange(text, start, end, sid, cls, selected) {
+  const state = selected ? '' : ' unselected';
+  return esc(text.slice(0, start)) +
+    `<button type="button" class="change-fragment ${cls}${state}" data-toggle-change="${esc(sid)}" aria-pressed="${selected}">${esc(text.slice(start, end))}</button>` +
+    esc(text.slice(end));
+}
+function combinedPassageDiff(passage, items) {
+  const ops = [];
+  for (const item of items) {
+    let original = item.s.original;
+    let start = original === '  (double space)' ? passage.search(/[^ ]  +[^ ]/) + 1 : passage.indexOf(original);
+    if (start < 0) continue;
+    if (original === '  (double space)') {
+      original = (passage.slice(start).match(/^  +/) || ['  '])[0];
+    }
+    const fixed = item.s.original === '  (double space)'
+      ? original.replace(/  +/g, ' ')
+      : item.s.replacement;
+    ops.push({ start, end: start + original.length, original, replacement: fixed, item });
+  }
+  ops.sort((a, b) => a.start - b.start);
+  const oldParts = [], newParts = [];
+  let cursor = 0;
+  const appliedItems = [];
+  for (const op of ops) {
+    if (op.start < cursor) continue;
+    const unchanged = passage.slice(cursor, op.start);
+    const pair = minimalChangePair(op.original, op.replacement);
+    const visibleNew = op.item.selected ? op.replacement : op.original;
+    oldParts.push(esc(unchanged), inlineChange(op.original, pair.oldStart, pair.oldEnd, op.item.s.id, 'hl-old', op.item.selected));
+    newParts.push(esc(unchanged), inlineChange(visibleNew,
+      op.item.selected ? pair.newStart : pair.oldStart,
+      op.item.selected ? pair.newEnd : pair.oldEnd,
+      op.item.s.id, op.item.selected ? 'hl-new' : '', op.item.selected));
+    cursor = op.end;
+    appliedItems.push(op.item);
+  }
+  oldParts.push(esc(passage.slice(cursor)));
+  newParts.push(esc(passage.slice(cursor)));
+  return { oldHtml: oldParts.join(''), newHtml: newParts.join(''), appliedItems };
 }
 function embedBlocks(bodyMd, placements) {
   const covered = new Set();
@@ -630,6 +889,7 @@ async function openHistory(id, edition) {
   clearErrs();
   S.cur = { id, edition: edition || 'original', sugs: null, sugState: 'idle', editorUrl: null, isPublished: false, translations: [] };
   S.decisions = {};
+  S.groupDeselect.clear();
   showView('history');
   setStatus('abrindo…', 'busy');
   try {
@@ -649,9 +909,12 @@ async function openHistory(id, edition) {
 function renderHistory(j) {
   const st = S.cur.store;
   $('h-title').textContent = ' ' + (j.title || '#' + S.cur.id);
+  const cover = $('h-cover');
+  cover.style.display = j.cover ? '' : 'none';
+  if (j.cover) cover.src = j.cover;
   const tabs = S.cur.translations.length
-    ? `<button class="${S.cur.edition === 'original' ? '' : 'font-ui text-sm rounded-lg px-3 py-1.5 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition'}" data-ed="original">Original</button>` +
-      S.cur.translations.map(t => `<button class="${S.cur.edition === t.language ? '' : 'font-ui text-sm rounded-lg px-3 py-1.5 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition'}" data-ed="${t.language}">${esc(t.language.toUpperCase())}</button>`).join('')
+    ? `<button class="${S.cur.edition === 'original' ? 'active' : 'font-ui text-sm rounded-lg px-3 py-1.5 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition'}" data-ed="original">Original</button>` +
+      S.cur.translations.map(t => `<button class="${S.cur.edition === t.language ? 'active' : 'font-ui text-sm rounded-lg px-3 py-1.5 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition'}" data-ed="${t.language}">${esc(t.language.toUpperCase())}</button>`).join('')
     : '';
   const ed = $('edtabs');
   ed.style.display = tabs ? '' : 'none';
@@ -721,35 +984,54 @@ function renderReview(scroll) {
   let cur = body;
   const placements = [];
   const skipped = [];
-  let delta = 0;
+  const sourceParagraphs = paragraphRanges(body);
+  const entries = [];
   const sugs = S.cur.sugs || [];
   sugs.forEach((s, k) => {
     const pos = s.original === '  (double space)' ? cur.search(/[^ ]  +[^ ]/) : cur.indexOf(s.original);
     if (pos === -1) { skipped.push(k + 1); return; }
-    const eIdx = cur.slice(0, pos).split('\n').length - 1;
-    const spanOrig = s.original === '  (double space)' ? 1 : s.original.split('\n').length;
-    const spanNew = s.original === '  (double space)' ? 1 : s.replacement.split('\n').length;
+    const paragraph = paragraphRanges(cur).find(p => pos >= p.startPos && pos <= p.endPos);
+    if (!paragraph || !sourceParagraphs[paragraph.index]) { skipped.push(k + 1); return; }
     const v = S.decisions[s.id];
-    const h = diffHunk(cur, s);
-    if (!v) {
-      placements.push({
-        line: eIdx - delta, span: spanOrig,
-        html: `<div class="sugwidget" data-sid="${s.id}" data-pending="1">` +
-          diffBlock(h, s.reason, k + 1) +
-          `<div class="decbar"><button class="btn-y" data-dec-y="${s.id}">✓ Aceitar</button>` +
-          `<button class="btn-n" data-dec-n="${s.id}">✗ Rejeitar</button></div></div>`,
-      });
-    } else if (v === 'y') {
-      placements.push({
-        line: eIdx - delta, span: spanOrig,
-        html: `<div class="sugwidget dec-y"><div class="diff"><div class="dnew"><span class="sign">+</span><span>${h.newHtml}</span></div></div></div>`,
-      });
+    if (v !== 'n') entries.push({ s, k, decision: v, paragraphIndex: paragraph.index });
+    if (v === 'y') {
       if (s.original === '  (double space)') cur = cur.replace(/[^ ]  +[^ ]/g, m => m.replace(/  +/g, ' '));
       else { const i = cur.indexOf(s.original); if (i !== -1) cur = cur.slice(0, i) + s.replacement + cur.slice(i + s.original.length); }
-      delta += spanNew - spanOrig;
     }
-    // rejeitada: sem widget — o texto original flui normalmente (versão final)
   });
+  const groups = new Map();
+  entries.forEach(item => {
+    if (!groups.has(item.paragraphIndex)) groups.set(item.paragraphIndex, []);
+    groups.get(item.paragraphIndex).push(item);
+  });
+  for (const [paragraphIndex, items] of groups) {
+    const source = sourceParagraphs[paragraphIndex];
+    if (!source) { skipped.push(...items.map(x => x.k + 1)); continue; }
+    items.forEach(item => { item.selected = item.decision === 'y' || !S.groupDeselect.has(item.s.id); });
+    const diff = combinedPassageDiff(source.text, items);
+    const activeItems = diff.appliedItems;
+    skipped.push(...items.filter(x => !activeItems.includes(x)).map(x => x.k + 1));
+    if (!activeItems.length) continue;
+    const pendingItems = activeItems.filter(x => !x.decision);
+    const selectedPending = pendingItems.filter(x => itemSelected(x));
+    const reasons = [...new Set(activeItems.map(x => x.s.reason).filter(Boolean))].join(', ');
+    const indices = activeItems.map(x => x.k + 1).join(', ');
+    const ids = pendingItems.map(x => x.s.id).join(',');
+    const acceptLabel = selectedPending.length === pendingItems.length
+      ? 'Aceitar todas'
+      : selectedPending.length ? `Aceitar ${portugueseCount(selectedPending.length)}` : 'Nenhuma selecionada';
+    const range = source.end - source.start + 1;
+    placements.push({
+      line: source.start,
+      span: range,
+      html: `<div class="sugwidget grouped${pendingItems.length ? '' : ' dec-y'}"${pendingItems.length ? ' data-pending="1"' : ''}>` +
+        `<div class="hunkhead">passagem · correções ${indices}${reasons ? ` · ${esc(reasons)}` : ''}${pendingItems.length ? ` · ${pendingItems.length} pendente${pendingItems.length > 1 ? 's' : ''}` : ' · aceitas'}</div>` +
+        `<div class="diff">${pendingItems.length ? `<div class="dold"><span class="sign">−</span><span>${diff.oldHtml}</span></div>` : ''}` +
+        `<div class="dnew"><span class="sign">+</span><span>${diff.newHtml}</span></div></div>` +
+        (pendingItems.length ? `<div class="decbar"><button class="btn-y" data-accept-group="${ids}"${selectedPending.length ? '' : ' disabled'}>✓ ${acceptLabel}</button>` +
+        `<button class="btn-n" data-dec-n="${ids}">✗ Rejeitar todas</button></div>` : '') + `</div>`,
+    });
+  }
   let html = embedBlocks(body, placements);
   if (skipped.length) html += `<p class="hint">Correções ${skipped.join(', ')} fora do corpo do texto ou sobrepostas.</p>`;
   const rej = sugs.filter(s => S.decisions[s.id] === 'n');
@@ -762,8 +1044,9 @@ function renderReview(scroll) {
   const acc = sugs.filter(s => S.decisions[s.id] === 'y').length;
   const rejN = sugs.length - pend - acc;
   $('rv-count').textContent = `${pend} pendentes · ${acc} aceitas · ${rejN} rejeitadas de ${sugs.length}`;
-  document.querySelectorAll('[data-dec-y]').forEach(b => b.onclick = () => decide(b.dataset.decY, 'y'));
-  document.querySelectorAll('[data-dec-n]').forEach(b => b.onclick = () => decide(b.dataset.decN, 'n'));
+  document.querySelectorAll('[data-accept-group]').forEach(b => b.onclick = () => acceptGroup(b.dataset.acceptGroup));
+  document.querySelectorAll('[data-dec-n]').forEach(b => b.onclick = () => decideMany(b.dataset.decN, 'n'));
+  document.querySelectorAll('[data-toggle-change]').forEach(b => b.onclick = () => toggleGroupSelection(b.dataset.toggleChange));
   document.querySelectorAll('[data-reopen]').forEach(b => b.onclick = () => decide(b.dataset.reopen, null));
   updateTopButtons();
   if (scroll) {
@@ -775,13 +1058,38 @@ function renderEdTabs2() {
   const box = $('edtabs2');
   if (!S.cur.translations.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = '';
-  const btn = (ed, label) => `<button class="${ed === S.cur.edition ? '' : 'font-ui text-sm rounded-lg px-3 py-1.5 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition'}" data-ed="${ed}">${label}</button>`;
+  const btn = (ed, label) => `<button class="${ed === S.cur.edition ? 'active' : 'font-ui text-sm rounded-lg px-3 py-1.5 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition'}" data-ed="${ed}">${label}</button>`;
   box.innerHTML = btn('original', 'Original') + S.cur.translations.map(t => btn(t.language, t.language.toUpperCase())).join('');
   box.querySelectorAll('button').forEach(b => b.onclick = () => openHistory(S.cur.id, b.dataset.ed));
 }
 function decide(id, v) {
   if (v == null) delete S.decisions[id];
   else S.decisions[id] = v;
+  S.groupDeselect.delete(id);
+  renderReview(true);
+}
+function itemSelected(item) { return item.decision === 'y' || !S.groupDeselect.has(item.s.id); }
+function portugueseCount(n) {
+  return ['nenhuma', 'uma', 'duas', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez'][n] || String(n);
+}
+function toggleGroupSelection(id) {
+  if (S.groupDeselect.has(id)) S.groupDeselect.delete(id);
+  else S.groupDeselect.add(id);
+  renderReview(true);
+}
+function acceptGroup(ids) {
+  ids.split(',').filter(Boolean).forEach(id => {
+    S.decisions[id] = S.groupDeselect.has(id) ? 'n' : 'y';
+    S.groupDeselect.delete(id);
+  });
+  renderReview(true);
+}
+function decideMany(ids, value) {
+  ids.split(',').filter(Boolean).forEach(id => {
+    if (value == null) delete S.decisions[id];
+    else S.decisions[id] = value;
+    S.groupDeselect.delete(id);
+  });
   renderReview(true);
 }
 function updateTopButtons() {
