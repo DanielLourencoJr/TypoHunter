@@ -1,0 +1,20 @@
+# Wording for opaque-marker placeholders (model-facing, so it lives here
+# with the prompts instead of hardcoded in lib/proofread.js).
+# {n} is the 1-based marker index, {label} the mapped type name.
+
+placeholder: "[media {n}: {label}]"
+fallback: media
+
+labels:
+  embeddedPost: embedded post
+  digestPostEmbed: embedded post
+  pullquote: featured quote
+  button: button
+  image: image
+  pdf: PDF
+  footnote: footnote
+  youtube2: video
+  subscribeWidget: subscribe button
+  callout: callout
+  calloutBlock: callout
+  substack_mentions: mention

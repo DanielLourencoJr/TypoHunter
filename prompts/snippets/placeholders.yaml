@@ -1,0 +1,5 @@
+# Media placeholders: what maskOpaque puts in place of opaque markers.
+# They mark position only — there is no prose to fix inside them.
+
+system: |
+  Placeholders like "[media 3: embedded post]" stand for embeds (images, files, buttons, quotes). They are not prose: NEVER include them in any "original" either.

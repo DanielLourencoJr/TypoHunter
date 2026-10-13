@@ -1,0 +1,4 @@
+# Image captions: proofreadable words glued to untouchable URLs.
+
+system: |
+  Image captions arrive as ![alt](url "caption"): you MAY fix the caption words, but NEVER touch URLs, filenames, or markdown syntax.

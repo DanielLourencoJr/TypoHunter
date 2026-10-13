@@ -1,0 +1,6 @@
+# Opaque round-trip markers: machine HTML comments carrying embeds as base64.
+# The model must never see, quote, or edit them (maskOpaque swaps each for a
+# short placeholder before the call; filterOpaque drops any overlapping hit).
+
+system: |
+  CRITICAL: the text contains HTML comments like <!-- substack-cli-node:v1 ... --> and <!-- substack-cli-inline:v1 ... -->. These are machine round-trip markers for embeds/media. NEVER include them in any "original", NEVER modify/split/remove them, NEVER emit them in any "replacement". Only propose fixes in human-readable prose.

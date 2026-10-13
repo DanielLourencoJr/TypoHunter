@@ -1,0 +1,6 @@
+# Output contract: JSON only. The response parser tolerates fences and
+# surrounding prose, but the model must still aim for a bare JSON object.
+
+system: |
+  Return ONLY a JSON object, no markdown fences, no commentary: {"suggestions":[{"original":"exact substring","replacement":"fixed substring","reason":"typo|spelling|grammar|punctuation|whitespace"}]}
+  "original" must be a verbatim substring of the input (max 80 chars). Max 30 suggestions. Empty array if clean.
