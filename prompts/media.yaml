@@ -1,8 +1,9 @@
 # Wording for opaque-marker placeholders (model-facing, so it lives here
 # with the prompts instead of hardcoded in lib/proofread.js).
-# {n} is the 1-based marker index, {label} the mapped type name.
+# {id} is the first 8 hex chars of the marker bytes' SHA-256 (stable under
+# insertions — never a positional counter), {label} the mapped type name.
 
-placeholder: "[media {n}: {label}]"
+placeholder: "[media {id}: {label}]"
 fallback: media
 
 labels:

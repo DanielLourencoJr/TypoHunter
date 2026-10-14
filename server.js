@@ -7,6 +7,12 @@ import { getDraft, listDrafts, listPublished, updateDraft, publishDraft, transla
 import { draftToMarkdown, tiptapToMarkdown } from "../SubstackCLI/lib/convert.js";
 import { parseFrontmatter, stringifyFrontmatter } from "../SubstackCLI/lib/frontmatter.js";
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
+import {
+  splitParagraphs, paraHash, promptVersion, defaultModel,
+  partitionParagraphs, groupNewUnits, proofreadText,
+  attributeSuggestions, mergeLedgerSuggestions, reviewedPct,
+  filterSuggestions,
+} from "./lib/proofread.js";
 import { htmlToMarkdown } from "../SubstackKit/lib/convert/html_to_md.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -230,6 +236,9 @@ function blankEdStore(md) {
     pushes: [],
     lastSeen: snapOf(md),
     mode: "none",
+    // Silent review ledger: paraHash -> {suggestions, model, promptHash, at}.
+    // Identity is content (never position); survives external syncs.
+    reviewed: {},
   };
 }
 
@@ -239,6 +248,7 @@ function migrateStore(store) {
   if (store.editions) {
     for (const ed of Object.values(store.editions)) {
       ed.pushes = ed.pushes || [];
+      if (!ed.reviewed || typeof ed.reviewed !== "object") { ed.reviewed = {}; changed = true; }
       // collapse legacy duplicate-content push versions inside each edition
       while (ed.versions.length > 1) {
         const last = ed.versions[ed.versions.length - 1];
@@ -520,23 +530,42 @@ const server = http.createServer(async (req, res) => {  try {
         listDrafts({ sid, publicationUrl: pub, limit, offset }),
         listPublished({ sid, publicationUrl: pub, limit, offset }),
       ]);
-      const item = (x, published) => ({
-        id: x.id,
-        title: x.draft_title || x.title,
-        updated: x.draft_updated_at,
-        date: x.post_date || x.draft_updated_at,
-        published: published || !!x.is_published,
-        audience: x.audience,
-        slug: x.slug || null,
-        cover: x.cover_image || null,
-        likes: x.reaction_count ?? null,
-        comments: (x.comment_count ?? 0) + (x.child_comment_count ?? 0),
-        views: x.stats?.views ?? x.stats?.opened ?? null,
-        url: x.slug
-          ? `https://${pub.replace(/^https?:\/\//, "")}/p/${x.slug}`
-          : `https://${pub.replace(/^https?:\/\//, "")}/publish/post/${x.id}`,
-        editorUrl: `https://${pub.replace(/^https?:\/\//, "")}/publish/post/${x.id}`,
-      });
+      // Reviewed-% comes from the LOCAL cache only (original edition): never
+      // fetch bodies just to compute it. Unopened posts report null (—).
+      const lpver = promptVersion(null);
+      const lpvintage = {
+        model: process.env.GROQ_API_KEY ? (process.env.GROQ_MODEL || defaultModel()) : "heuristic",
+        promptHash: lpver.hash,
+      };
+      const item = (x, published) => {
+        let reviewedPctVal = null;
+        try {
+          const st = loadStore(String(x.id));
+          const oes = st?.editions?.original;
+          if (oes?.reviewed) {
+            const { masked: lmasked } = maskOpaque(latestMarkdown(oes));
+            reviewedPctVal = reviewedPct(lmasked, oes.reviewed, lpvintage);
+          }
+        } catch { /* no cache yet — stays null */ }
+        return {
+          id: x.id,
+          title: x.draft_title || x.title,
+          updated: x.draft_updated_at,
+          date: x.post_date || x.draft_updated_at,
+          published: published || !!x.is_published,
+          audience: x.audience,
+          slug: x.slug || null,
+          cover: x.cover_image || null,
+          likes: x.reaction_count ?? null,
+          comments: (x.comment_count ?? 0) + (x.child_comment_count ?? 0),
+          reviewedPct: reviewedPctVal,
+          views: x.stats?.views ?? x.stats?.opened ?? null,
+          url: x.slug
+            ? `https://${pub.replace(/^https?:\/\//, "")}/p/${x.slug}`
+            : `https://${pub.replace(/^https?:\/\//, "")}/publish/post/${x.id}`,
+          editorUrl: `https://${pub.replace(/^https?:\/\//, "")}/publish/post/${x.id}`,
+        };
+      };
       return send(res, 200, {
         drafts: (d.posts || []).map((x) => item(x, x.is_published)),
         published: (p.posts || []).map((x) => item(x, true)),
@@ -584,7 +613,9 @@ const server = http.createServer(async (req, res) => {  try {
               note: "synced from Substack (edited externally)",
               createdAt: new Date().toISOString(),
             });
-            es.suggestions = []; // computed against older text — re-proofread
+            // Ledger entries are content-addressed, so they stay valid for
+            // every unchanged paragraph — never wiped here. The next
+            // proofread only sends the new paragraphs to the model.
             es.lastSeen = fresh;
             dirty = true;
           }
@@ -623,20 +654,67 @@ const server = http.createServer(async (req, res) => {  try {
       if (!es) return send(res, 404, { error: "open the post edition first (GET /api/posts/:id?edition=…)" });
       const md = latestMarkdown(es);
       const { masked } = maskOpaque(md);
-      const job = enqueueAnalysis("proofread", splitChunks(masked).length, async (progress) => {
-        const result = await proofreadMarkdown(md, {
-          apiKey: process.env.GROQ_API_KEY,
-          model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-          language,
-          onUsage: (u) => progress(u.chunk),
-        });
+      // Ledger vintage: model name + prompt hash. A prompt/model change
+      // retires old verdicts — those paragraphs count as new (re-proofread).
+      const model = process.env.GROQ_MODEL || defaultModel();
+      const ver = promptVersion(language);
+      const vintage = { model: process.env.GROQ_API_KEY ? model : "heuristic", promptHash: ver.hash };
+      const estNew = partitionParagraphs(masked, es.reviewed, vintage).newUnits.length;
+      const job = enqueueAnalysis("proofread", Math.max(estNew, 1), async (progress) => {
         const fresh = loadStore(id);
         const fes = fresh?.editions?.[edition];
         if (!fes) throw new Error("store vanished mid-analysis");
-        fes.suggestions = result.suggestions;
-        fes.mode = result.mode;
+        fes.reviewed = fes.reviewed || {};
+        const cur = latestMarkdown(fes);
+        const { masked: curMasked, count: maskedCount } = maskOpaque(cur);
+        const { units, newUnits } = partitionParagraphs(curMasked, fes.reviewed, vintage);
+        const at = new Date().toISOString();
+        if (!process.env.GROQ_API_KEY) {
+          // Heuristic demo path is local + instant: run whole-text once and
+          // attribute its verdicts to the new units like model output.
+          const result = await proofreadMarkdown(cur, { language });
+          const buckets = {};
+          for (const u of newUnits) buckets[u.hash] = [];
+          for (const s of result.suggestions) {
+            for (const u of newUnits) {
+              if (u.para.includes(s.original)) buckets[u.hash].push(s);
+            }
+          }
+          let doneCount = 0;
+          for (const u of newUnits) {
+            fes.reviewed[u.hash] = {
+              suggestions: buckets[u.hash] || [],
+              model: vintage.model, promptHash: vintage.promptHash, at, via: "llm",
+            };
+            progress(++doneCount);
+          }
+        } else {
+          const batches = groupNewUnits(newUnits);
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+          for (let b = 0; b < batches.length; b++) {
+            if (b > 0) await sleep(3000); // TPM pacing, same as before
+            const batchText = batches[b].map((u) => u.para).join("\n\n");
+            const found = await proofreadText(batchText, {
+              apiKey: process.env.GROQ_API_KEY,
+              model, language,
+              system: ver.system, template: ver.template,
+              onUsage: (u) => progress(u.chunk),
+            });
+            const byHash = attributeSuggestions(found, batches[b], b);
+            for (const u of batches[b]) {
+              fes.reviewed[u.hash] = {
+                suggestions: byHash[u.hash] || [],
+                model: vintage.model, promptHash: vintage.promptHash, at, via: "llm",
+              };
+            }
+          }
+          if (batches.length) {
+            fes.mode = `ai:${model}${batches.length > 1 ? `×${batches.length}` : ""}${maskedCount ? `-${maskedCount}m` : ""}`;
+          }
+        }
+        fes.suggestions = filterSuggestions(cur, mergeLedgerSuggestions(units, fes.reviewed, vintage)).slice(0, 200);
         saveStore(id, fresh);
-        return { suggestions: result.suggestions, mode: result.mode, baseVersion: fes.versions.length - 1 };
+        return { suggestions: fes.suggestions, mode: fes.mode, baseVersion: fes.versions.length - 1 };
       });
       const { position } = queueAhead(job);
       return send(res, 202, { jobId: job.id, position, etaSec: jobEtaSec(job) });
@@ -682,6 +760,26 @@ const server = http.createServer(async (req, res) => {  try {
         createdAt: new Date().toISOString(),
       });
       es.suggestions = []; // consumed into the new version — re-proofread for more
+      // Record ALL resulting paragraphs as reviewed-empty WITHOUT the model:
+      // the user just saw the suggestion list and decided. Accepted fixes are
+      // in the text now (their anchors can't re-match); rejected ones must
+      // never be re-offered. If the user later edits a paragraph in Substack,
+      // its hash flips and it counts as new again — correctly re-offered.
+      // Without this, every fix would flip its paragraph hash and force a
+      // re-proofread loop.
+      es.reviewed = es.reviewed || {};
+      const lang = edition === "original" ? null : edition;
+      const aver = promptVersion(lang);
+      const amodel = process.env.GROQ_API_KEY ? (process.env.GROQ_MODEL || defaultModel()) : "heuristic";
+      const { masked: nextMasked } = maskOpaque(next);
+      const at = new Date().toISOString();
+      const kept = {};
+      for (const para of splitParagraphs(nextMasked)) {
+        kept[paraHash(para)] = {
+          suggestions: [], model: amodel, promptHash: aver.hash, at, via: "apply",
+        };
+      }
+      es.reviewed = kept;
       saveStore(id, store);
       return send(res, 200, { store: es });
     }

@@ -855,8 +855,8 @@ function fmtStat(v) { return v == null ? '—' : String(v); }
 function libCard(p) {
   const cover = p.cover ? `<img class="cover" src="${esc(p.cover)}" loading="lazy" alt="" />` : `<div class="nocover">sem capa</div>`;
   const stats = p.published
-    ? `<div class="stats"><span>👁 ${fmtStat(p.views)}</span><span>♥ ${fmtStat(p.likes)}</span><span>💬 ${p.comments ?? '—'}</span>${p.restacks != null ? `<span>🔁 ${p.restacks}</span>` : ''}</div>`
-    : `<div class="stats"><span>${esc(p.audience || 'everyone')}</span></div>`;
+    ? `<div class="stats"><span>👁 ${fmtStat(p.views)}</span><span>♥ ${fmtStat(p.likes)}</span><span>💬 ${p.comments ?? '—'}</span>${p.restacks != null ? `<span>🔁 ${p.restacks}</span>` : ''}${p.reviewedPct != null ? `<span title="texto já revisado (nesta versão do prompt)">✓ ${p.reviewedPct}%</span>` : ''}</div>`
+    : `<div class="stats"><span>${esc(p.audience || 'everyone')}</span>${p.reviewedPct != null ? `<span title="texto já revisado (nesta versão do prompt)">✓ ${p.reviewedPct}%</span>` : ''}</div>`;
   return `<button class="libcard transition duration-150 hover:-translate-y-0.5 hover:shadow-xl" data-id="${p.id}">${cover}<div class="pad"><h4>${esc(p.title || '(sem título)')}</h4>` +
     `<small>${fmtDate(p.date)}${p.slug ? ' · /' + esc(p.slug) : ''}${p.words != null ? ` · ${p.words} palavras` : ''}</small>${stats}</div></button>`;
 }

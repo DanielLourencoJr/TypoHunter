@@ -13,7 +13,7 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
   by evaluating the extracted script in node with DOM stubs
   (`document.querySelectorAll/getElementById`), never by copying functions.
 - Sibling lib reused via relative import: `../SubstackCLI/lib/{drafts,convert,md,frontmatter,auth}.js`.
-  Public-post HTML uses `../../SubstackKit/lib/convert/html_to_md.js` (tested,
+  Public-post HTML uses `../SubstackKit/lib/convert/html_to_md.js` (tested,
   captions preserved). Never reimplement converters; run node from this repo
   root so `../SubstackCLI` resolves. SubstackKit is read-only by design — the
   writer flow's authenticated writes stay in SubstackCLI; never route our SID
@@ -56,6 +56,20 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
   (~72% fewer prompt chars on media-heavy texts). Suggestions touching URLs
   are dropped (captions share `![alt](url "caption")` syntax with links).
   UI renders them as media chips via sentinel swap (`\u0000DIFn\u0000`).
+- Silent review ledger (`reviewed` per edition: `paraHash -> {suggestions,
+  model, promptHash, at, via}`): paragraph identity is SHA-256 of RAW bytes
+  (only CRLF->LF normalized — one space difference = different paragraph).
+  Only new-vintage paragraphs reach the model; batches group ADJACENT new
+  paragraphs only, never mixing reviewed text. External sync never wipes the
+  ledger; apply records resulting paragraphs as reviewed-empty (no re-offer,
+  no re-proofread loop). Prompt/model change retires old verdicts
+  (re-proofread lazily). Media placeholder id is the marker-bytes hash
+  (`prompts/media.yaml`), never a positional counter. Library list shows
+  cache-only `reviewedPct` (null = unopened, never fetch bodies for it).
+- Frozen benchmark corpus: `testdata/corpus/` (47 posts, manifest +
+  corpusHash, `FROZEN.txt`) — NEVER regenerate or "fix"; author keeps typos
+  as test material. A/B context experiment: `scripts/ab-context.mjs`
+  (solo vs read-only-neighbor arms, one paragraph per call both sides).
 
 ## Styling
 
