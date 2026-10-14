@@ -1,0 +1,676 @@
+{
+  "exportedAt": "2026-10-14T20:39:55.915Z",
+  "pub": "danielloureno1.substack.com",
+  "frozen": true,
+  "posts": [
+    {
+      "id": 177039177,
+      "slug": null,
+      "title": "A Santíssima Trindade e os mistérios da fé",
+      "date": "2026-10-05T19:11:33.796Z",
+      "published": false,
+      "files": [
+        {
+          "file": "posts/177039177-a-santi-ssima-trindade-e-os-miste-rios-da-fe.md",
+          "sha256": "3223b3c8705b7f6ebda3d309dfca9330b1fce42cb39b231490d0b9bfcce3034d",
+          "chars": 1819
+        }
+      ]
+    },
+    {
+      "id": 177653194,
+      "slug": null,
+      "title": "Iluminismo",
+      "date": "2026-10-05T19:05:13.232Z",
+      "published": false,
+      "files": [
+        {
+          "file": "posts/177653194-iluminismo.md",
+          "sha256": "c6153da9575e123ec6a96ccc27f8ae1b8741d98d7cee22bd40104322f2a003cd",
+          "chars": 2950
+        }
+      ]
+    },
+    {
+      "id": 212603154,
+      "slug": null,
+      "title": "Treinando minha própria Inteligência Artificial",
+      "date": "2026-10-05T18:52:58.007Z",
+      "published": false,
+      "files": [
+        {
+          "file": "posts/212603154-treinando-minha-pro-pria-intelige-ncia-artificial.md",
+          "sha256": "587a1fa7802fdcd7ae8a16bec9578cb4ceb4a87e1ee5b1399390b574d1d433f9",
+          "chars": 4078
+        }
+      ]
+    },
+    {
+      "id": 175316044,
+      "slug": null,
+      "title": "How to use the Substack editor",
+      "date": "2025-10-05T03:33:05.673Z",
+      "published": false,
+      "files": [
+        {
+          "file": "posts/175316044-how-to-use-the-substack-editor.md",
+          "sha256": "95141052fe0c752d4bb0580dd1239411d6f6652e52ee9e803a56e4c4010dc2be",
+          "chars": 4445
+        }
+      ]
+    },
+    {
+      "id": 219115799,
+      "slug": "genese-da-inovacao",
+      "title": "Gênese da Inovação",
+      "date": "2026-10-06T20:32:46.098Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/219115799-genese-da-inovacao.md",
+          "sha256": "6d5e36ae7987f930ce0beaac1c7563c135452659d6e72cdeeeb548feeae4d707",
+          "chars": 10886
+        }
+      ]
+    },
+    {
+      "id": 217277733,
+      "slug": "itoshi-sae-o-melhor-personagem-de",
+      "title": "Itoshi Sae, o melhor personagem de Blue Lock",
+      "date": "2026-09-28T16:15:24.392Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/217277733-itoshi-sae-o-melhor-personagem-de.md",
+          "sha256": "dfc4fb546899154a89377809753e5636a5da9921aa9e20cf826fb72a1337662a",
+          "chars": 4178
+        },
+        {
+          "file": "posts/217277733-itoshi-sae-o-melhor-personagem-de.en.md",
+          "sha256": "5e0d077550d02c982b87b87d63347cafcca507593fc476c435bebf8c9fa89fe7",
+          "chars": 4158
+        },
+        {
+          "file": "posts/217277733-itoshi-sae-o-melhor-personagem-de.ja.md",
+          "sha256": "d484b458fa9186bba9786a1a79f9ab26cbcf86ed29ccb763fdca47a907b04958",
+          "chars": 2186
+        }
+      ]
+    },
+    {
+      "id": 216774988,
+      "slug": "minha-experiencia-usando-opencode",
+      "title": "Minha experiência usando OpenCode - Parte 2",
+      "date": "2026-09-21T17:42:45.943Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/216774988-minha-experiencia-usando-opencode.md",
+          "sha256": "1edff053678a7da9bdce80c8d204f12c8e3781ee155c7c3e30a5a58a46c576dc",
+          "chars": 12985
+        }
+      ]
+    },
+    {
+      "id": 215057856,
+      "slug": "capitulo-10",
+      "title": "Capítulo 10: A irmãzinha mais velha",
+      "date": "2026-09-11T23:00:46.078Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/215057856-capitulo-10.md",
+          "sha256": "070d06d758aee9727cd40a8492681ffb673cd6c30a205b94791893d252fb5e38",
+          "chars": 8668
+        }
+      ]
+    },
+    {
+      "id": 213723396,
+      "slug": "capitulo-9-o-coliseu-e-confinado",
+      "title": "Capítulo 9: O Coliseu é confinado",
+      "date": "2026-09-04T23:00:50.511Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/213723396-capitulo-9-o-coliseu-e-confinado.md",
+          "sha256": "9b4952ce021968b324bdd4cd48e8178443e6bc9d181fbf7f42c8250855af72df",
+          "chars": 5503
+        }
+      ]
+    },
+    {
+      "id": 211585466,
+      "slug": "analisando-a-escrita-da-bolha",
+      "title": "Analisando a escrita da Bolha",
+      "date": "2026-09-01T16:40:16.221Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/211585466-analisando-a-escrita-da-bolha.md",
+          "sha256": "91503ffcf16b522176ff280b5cd0c665b3a8939209627905814673a092f96fad",
+          "chars": 104473
+        }
+      ]
+    },
+    {
+      "id": 212309256,
+      "slug": "capitulo-8-uma-luta-ate-a-morte",
+      "title": "Capítulo 8: Uma luta até a morte",
+      "date": "2026-08-31T23:01:01.872Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/212309256-capitulo-8-uma-luta-ate-a-morte.md",
+          "sha256": "aab215dcae33e6dc6ff2f1e6cacbfe937611b51d26fcb7a3b28cc5e52eef076a",
+          "chars": 7159
+        }
+      ]
+    },
+    {
+      "id": 212300324,
+      "slug": "capitulo-7-inicio-da-aventura",
+      "title": "Capítulo 7: Início da Aventura",
+      "date": "2026-08-28T23:01:07.321Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/212300324-capitulo-7-inicio-da-aventura.md",
+          "sha256": "c320ad3025dc1ae3621376977d83158924709f7c853bbfac36c9bab8219ada68",
+          "chars": 8538
+        }
+      ]
+    },
+    {
+      "id": 211881850,
+      "slug": "capitulo-6-o-fim-de-uma-relacao",
+      "title": "Capítulo 6: O fim de uma relação",
+      "date": "2026-08-24T23:00:55.183Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/211881850-capitulo-6-o-fim-de-uma-relacao.md",
+          "sha256": "7e054d38a91eddfb019abe3eac433d4c49762ba13445e6b5be8c1f33ee91b96b",
+          "chars": 7294
+        }
+      ]
+    },
+    {
+      "id": 211395384,
+      "slug": "capitulo-5",
+      "title": "Capítulo 5: Troca de segredos",
+      "date": "2026-08-21T23:00:46.300Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/211395384-capitulo-5.md",
+          "sha256": "2b6d688fb725cf545bd5183a8790f75c56fe3e7275cbec03ababad5beb143fec",
+          "chars": 13405
+        }
+      ]
+    },
+    {
+      "id": 210953316,
+      "slug": "capitulo-4-mentiroso-por-essencia",
+      "title": "Capítulo 4: Mentiroso por essência",
+      "date": "2026-08-17T23:00:41.561Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/210953316-capitulo-4-mentiroso-por-essencia.md",
+          "sha256": "812a1542aabbdb92d270960a8c2287db0e6d5e8a13b708acbe547b6f85f13268",
+          "chars": 10802
+        }
+      ]
+    },
+    {
+      "id": 211349035,
+      "slug": "capitulo-3-a-primeira-vitoria",
+      "title": "Capítulo 3: A primeira vitória?",
+      "date": "2026-08-16T10:00:58.896Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/211349035-capitulo-3-a-primeira-vitoria.md",
+          "sha256": "7d44b01346798f2de417d1a553ed5318062c3fa6004992f57df363c81c1567b6",
+          "chars": 13678
+        }
+      ]
+    },
+    {
+      "id": 210915005,
+      "slug": "capitulo-2-sua-habilidade-e",
+      "title": "Capítulo 2: Sua habilidade é...",
+      "date": "2026-08-14T23:01:42.314Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/210915005-capitulo-2-sua-habilidade-e.md",
+          "sha256": "1f8d7dfdd58c6dc1404c7763def03ee15917b5978bf3875e93a56956d7ecebd9",
+          "chars": 6543
+        }
+      ]
+    },
+    {
+      "id": 210762421,
+      "slug": "capitulo-1-um-pedacinho-do-inferno",
+      "title": "Capítulo 1: Um pedacinho do inferno",
+      "date": "2026-08-12T23:01:42.075Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/210762421-capitulo-1-um-pedacinho-do-inferno.md",
+          "sha256": "f169d6105042a550d937d5bce0ca6229ee6a0c0ceb76ed4d879db889bb2f1a01",
+          "chars": 7680
+        }
+      ]
+    },
+    {
+      "id": 210082780,
+      "slug": "prologo",
+      "title": "Prólogo",
+      "date": "2026-08-11T01:34:09.385Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/210082780-prologo.md",
+          "sha256": "faac447459b637121da18329c83484905e804806d0afd9eb49ec475fd5fbf3d8",
+          "chars": 6230
+        }
+      ]
+    },
+    {
+      "id": 209958703,
+      "slug": "crime-e-castigo-previu-a-internet",
+      "title": "Crime e Castigo previu a internet",
+      "date": "2026-08-05T18:12:07.439Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/209958703-crime-e-castigo-previu-a-internet.md",
+          "sha256": "2981aee98c9a05363e2c0163c539bae9f16e9d07e7857e49d06e2273f4309ef3",
+          "chars": 15225
+        }
+      ]
+    },
+    {
+      "id": 208803265,
+      "slug": "sistemas-de-poder-na-ficcao",
+      "title": "Sistemas de poder na ficção",
+      "date": "2026-07-28T09:32:45.791Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/208803265-sistemas-de-poder-na-ficcao.md",
+          "sha256": "f5a594dbd36a691805e8fdb82be87e4086272135d5d19c573303d2fcacc835ae",
+          "chars": 18307
+        }
+      ]
+    },
+    {
+      "id": 207711988,
+      "slug": "sasaki-kojiro-e-a-motivacao-intrinseca",
+      "title": "Sasaki Kojiro e a Motivação Intrínseca",
+      "date": "2026-07-20T19:49:39.312Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/207711988-sasaki-kojiro-e-a-motivacao-intrinseca.md",
+          "sha256": "dc72d6ad1789bae63e78c437a0f6146a33dab9c7986b744c16dde03891a68fe2",
+          "chars": 6088
+        }
+      ]
+    },
+    {
+      "id": 205745506,
+      "slug": "como-o-substack-funciona",
+      "title": "Como o Substack Funciona?",
+      "date": "2026-07-07T10:48:54.711Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/205745506-como-o-substack-funciona.md",
+          "sha256": "c2068847d89e18a80767ffdf77bc3c98c28fb47e5b7618c265ab045cc7fae2df",
+          "chars": 9981
+        }
+      ]
+    },
+    {
+      "id": 200140354,
+      "slug": "a-logica-crista",
+      "title": "A Lógica Cristã",
+      "date": "2026-06-01T21:01:11.642Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/200140354-a-logica-crista.md",
+          "sha256": "cc776bff72919cd140b8e0aae32b2a074875788c44e8bf21ce841d4588ef56c0",
+          "chars": 7418
+        }
+      ]
+    },
+    {
+      "id": 198416576,
+      "slug": "direita",
+      "title": "Direita",
+      "date": "2026-05-19T14:34:43.874Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/198416576-direita.md",
+          "sha256": "afd8d27b73f0be4cb954020ba5590c104404497bdb7094989fb6330303190adf",
+          "chars": 5102
+        }
+      ]
+    },
+    {
+      "id": 197244824,
+      "slug": "construi-uma-ferramenta-para-estudar",
+      "title": "Construí uma ferramenta para estudar inglês (de novo)",
+      "date": "2026-05-11T17:23:29.130Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/197244824-construi-uma-ferramenta-para-estudar.md",
+          "sha256": "252483c3f86bb64c1ba3e3b1d2f087cf61d451d2c09494121aeef4a5d90e299f",
+          "chars": 10207
+        }
+      ]
+    },
+    {
+      "id": 195679007,
+      "slug": "experimentando-o-opencode",
+      "title": "Experimentando o OpenCode",
+      "date": "2026-04-27T21:41:18.277Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/195679007-experimentando-o-opencode.md",
+          "sha256": "5ffe63e20838c0ebed620f3ffc63b8e95d7ac80db13f3aa3bb0fb50de64609b7",
+          "chars": 16080
+        }
+      ]
+    },
+    {
+      "id": 194932961,
+      "slug": "redes-neurais-e-o-futuro-das-llms",
+      "title": "Redes Neurais e o futuro das LLMs",
+      "date": "2026-04-21T16:29:12.745Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/194932961-redes-neurais-e-o-futuro-das-llms.md",
+          "sha256": "f88037c467bde4ec0a7ff06a9933222e53004aba22f4c9045b954d2b64f6f7be",
+          "chars": 20806
+        }
+      ]
+    },
+    {
+      "id": 193339642,
+      "slug": "dilema-do-guerreiro-no-comeco-depois",
+      "title": "Dilema do Guerreiro no Começo Depois do Fim",
+      "date": "2026-04-06T17:02:50.183Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/193339642-dilema-do-guerreiro-no-comeco-depois.md",
+          "sha256": "f6dace98c6cf0bdeafe15d63042614d2915f6cb45896d47cdb8c60a71226f8ab",
+          "chars": 11836
+        }
+      ]
+    },
+    {
+      "id": 191869196,
+      "slug": "ciclo-de-odio-em-attack-on-titan",
+      "title": "Ciclo de Ódio em Attack On Titan",
+      "date": "2026-03-23T17:01:19.328Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/191869196-ciclo-de-odio-em-attack-on-titan.md",
+          "sha256": "146e8d767ae99976f830b420000d89315cd42abd5ccf02f175c82c7848b98086",
+          "chars": 6424
+        }
+      ]
+    },
+    {
+      "id": 191119584,
+      "slug": "a-culpa-do-analfabetismo-funcional",
+      "title": "A Culpa do Analfabetismo Funcional é da Matemática",
+      "date": "2026-03-16T17:02:32.647Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/191119584-a-culpa-do-analfabetismo-funcional.md",
+          "sha256": "b6db97550651eddb781a25f74ec86ed985cbafb752e503ede484b79baeec1f24",
+          "chars": 13857
+        }
+      ]
+    },
+    {
+      "id": 190497708,
+      "slug": "aprender-ingles-nunca-foi-tao-facil",
+      "title": "Aprender inglês nunca foi tão fácil",
+      "date": "2026-03-10T17:01:16.653Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/190497708-aprender-ingles-nunca-foi-tao-facil.md",
+          "sha256": "1bf0bcd275798c3aae6c038c9c0ac121ebc4138463d4980deb3c6baf2c717141",
+          "chars": 7156
+        }
+      ]
+    },
+    {
+      "id": 189663021,
+      "slug": "lei-e-ordem",
+      "title": "Lei e Ordem",
+      "date": "2026-03-02T17:02:27.583Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/189663021-lei-e-ordem.md",
+          "sha256": "fedecbd3c7917181b86cde8d20cd9266f16963c6e3569dc141e50e02f33957ab",
+          "chars": 8277
+        }
+      ]
+    },
+    {
+      "id": 188910872,
+      "slug": "carteiras-bitcoin",
+      "title": "Carteiras Bitcoin",
+      "date": "2026-02-23T17:11:38.731Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/188910872-carteiras-bitcoin.md",
+          "sha256": "08e47cf66d8474f7aabbd23135b17122dcd1a49c07c780183681ba2ab2817f29",
+          "chars": 15995
+        }
+      ]
+    },
+    {
+      "id": 188148946,
+      "slug": "entenda-como-10-milhoes-de-bitcoins",
+      "title": "Entenda como 10 milhões de bitcoins não têm dono",
+      "date": "2026-02-16T16:41:48.946Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/188148946-entenda-como-10-milhoes-de-bitcoins.md",
+          "sha256": "72010403a582b2ab8ff604a2c0a24594898255819cd350c04f75ba8b33f9e96d",
+          "chars": 18606
+        }
+      ]
+    },
+    {
+      "id": 187404215,
+      "slug": "a-proxima-camada-de-abstracao",
+      "title": "A Próxima Camada de Abstração",
+      "date": "2026-02-09T16:06:51.788Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/187404215-a-proxima-camada-de-abstracao.md",
+          "sha256": "3211847d2baeede9a7efa388eb257839a5823547c975db984ae3e767d0cb6213",
+          "chars": 12421
+        }
+      ]
+    },
+    {
+      "id": 186629475,
+      "slug": "neuroplasticidade",
+      "title": "Neuroplasticidade",
+      "date": "2026-02-02T17:02:46.619Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/186629475-neuroplasticidade.md",
+          "sha256": "f8b0e13d03312ba1f1716cceb52dbda116637c645b78e0bb850091057b84456e",
+          "chars": 12655
+        }
+      ]
+    },
+    {
+      "id": 185879880,
+      "slug": "criptografia-de-curva-eliptica",
+      "title": "Criptografia de Curva Elíptica",
+      "date": "2026-01-26T20:09:03.280Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/185879880-criptografia-de-curva-eliptica.md",
+          "sha256": "a46be0dfd177a5f73d94e096ccaf2bb779e0bf51eb143c407793bc874aa8d310",
+          "chars": 8327
+        }
+      ]
+    },
+    {
+      "id": 185122608,
+      "slug": "matematica-por-tras-do-ataque-de",
+      "title": "Matemática por trás do Ataque de 51%",
+      "date": "2026-01-20T11:34:43.672Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/185122608-matematica-por-tras-do-ataque-de.md",
+          "sha256": "57329248b9c92858eb6260a98a3b454cfc486c68cd4a285f10ab056038958b00",
+          "chars": 11469
+        }
+      ]
+    },
+    {
+      "id": 184364651,
+      "slug": "bitcoin-nao-e-dinheiro",
+      "title": "Bitcoin não é dinheiro",
+      "date": "2026-01-12T21:27:58.354Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/184364651-bitcoin-nao-e-dinheiro.md",
+          "sha256": "0aef28807a7dc9314b1bb8a413ba0f9375b8976296dd1578d92c1bb256516bca",
+          "chars": 9480
+        }
+      ]
+    },
+    {
+      "id": 183601297,
+      "slug": "reinventando-a-roda-na-gestao-do",
+      "title": "Reinventando a roda na Gestão do Tempo",
+      "date": "2026-01-05T21:32:02.047Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/183601297-reinventando-a-roda-na-gestao-do.md",
+          "sha256": "f90ccbba66e2b1c8a2d43d2f15381c782d01c0094d6fa3eaf4ae159da127be93",
+          "chars": 4125
+        }
+      ]
+    },
+    {
+      "id": 182112701,
+      "slug": "uma-licao-sobre-processadores-e-engenharia",
+      "title": "Uma lição sobre processadores e engenharia",
+      "date": "2025-12-29T12:12:50.759Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/182112701-uma-licao-sobre-processadores-e-engenharia.md",
+          "sha256": "b26b76bdc83001de3ebd937c46a5eda4ba913930238eb18b0fdfb80f698f3530",
+          "chars": 14878
+        }
+      ]
+    },
+    {
+      "id": 181827587,
+      "slug": "como-aprendi-ingles",
+      "title": "Como aprendi inglês",
+      "date": "2025-12-22T11:39:11.454Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/181827587-como-aprendi-ingles.md",
+          "sha256": "a3b0eea138ce5808e3c6d7151d608a9ce0facbb4dfab385523378355b2e93a66",
+          "chars": 14949
+        }
+      ]
+    },
+    {
+      "id": 181350395,
+      "slug": "o-limite-da-computacao",
+      "title": "O Limite da Computação",
+      "date": "2025-12-14T14:01:00.934Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/181350395-o-limite-da-computacao.md",
+          "sha256": "9c95eb96de39338e31b201b93bcdd4aa453840a13b89689ee1b8f6e86f49dbd3",
+          "chars": 10818
+        }
+      ]
+    },
+    {
+      "id": 177034742,
+      "slug": "o-culto-a-ciencia",
+      "title": "O culto à ciência",
+      "date": "2025-10-25T12:17:36.539Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/177034742-o-culto-a-ciencia.md",
+          "sha256": "be8f7e62aaea27fafd12068e57822266a0d8de8e36dfd2584095db7db2b8103d",
+          "chars": 3871
+        }
+      ]
+    },
+    {
+      "id": 176450063,
+      "slug": "desenvolvimento-de-software",
+      "title": "Desenvolvimento de Software",
+      "date": "2025-10-17T21:17:42.668Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/176450063-desenvolvimento-de-software.md",
+          "sha256": "a9126e6dc2ec103944f4cfc051c5c1bb2e21b6e33d6771a84f80408bd4e38bd4",
+          "chars": 3293
+        }
+      ]
+    },
+    {
+      "id": 175316045,
+      "slug": "catolico-medio",
+      "title": "Católico Médio",
+      "date": "2025-10-09T16:09:08.197Z",
+      "published": true,
+      "files": [
+        {
+          "file": "posts/175316045-catolico-medio.md",
+          "sha256": "5b46290269cc48590ee0a0f14e4f4ad026e1b7434beedd789492c2fab826a72d",
+          "chars": 8023
+        }
+      ]
+    }
+  ],
+  "corpusHash": "071bb0856516b13ff88bf5cb34ed85c3ec8dd986519622e4b91de918afd8ec99"
+}

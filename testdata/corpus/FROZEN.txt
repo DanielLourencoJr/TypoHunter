@@ -1,0 +1,4 @@
+FROZEN corpus exported 2026-10-14T20:39:55.915Z from danielloureno1.substack.com.
+Do NOT regenerate or "fix" these texts: they are TypoHunter's standing
+real-world benchmark material (typos included on purpose).
+corpusHash: 071bb0856516b13ff88bf5cb34ed85c3ec8dd986519622e4b91de918afd8ec99
