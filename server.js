@@ -10,7 +10,7 @@ import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./
 import {
   splitParagraphs, paraHash, promptVersion, defaultModel,
   partitionParagraphs, groupNewUnits, proofreadText,
-  attributeSuggestions, mergeLedgerSuggestions, reviewedPct,
+  attributeSuggestions, mergeLedgerSuggestions,
   filterSuggestions,
 } from "./lib/proofread.js";
 import { htmlToMarkdown } from "../SubstackKit/lib/convert/html_to_md.js";
@@ -530,42 +530,23 @@ const server = http.createServer(async (req, res) => {  try {
         listDrafts({ sid, publicationUrl: pub, limit, offset }),
         listPublished({ sid, publicationUrl: pub, limit, offset }),
       ]);
-      // Reviewed-% comes from the LOCAL cache only (original edition): never
-      // fetch bodies just to compute it. Unopened posts report null (—).
-      const lpver = promptVersion(null);
-      const lpvintage = {
-        model: process.env.GROQ_API_KEY ? (process.env.GROQ_MODEL || defaultModel()) : "heuristic",
-        promptHash: lpver.hash,
-      };
-      const item = (x, published) => {
-        let reviewedPctVal = null;
-        try {
-          const st = loadStore(String(x.id));
-          const oes = st?.editions?.original;
-          if (oes?.reviewed) {
-            const { masked: lmasked } = maskOpaque(latestMarkdown(oes));
-            reviewedPctVal = reviewedPct(lmasked, oes.reviewed, lpvintage);
-          }
-        } catch { /* no cache yet — stays null */ }
-        return {
-          id: x.id,
-          title: x.draft_title || x.title,
-          updated: x.draft_updated_at,
-          date: x.post_date || x.draft_updated_at,
-          published: published || !!x.is_published,
-          audience: x.audience,
-          slug: x.slug || null,
-          cover: x.cover_image || null,
-          likes: x.reaction_count ?? null,
-          comments: (x.comment_count ?? 0) + (x.child_comment_count ?? 0),
-          reviewedPct: reviewedPctVal,
-          views: x.stats?.views ?? x.stats?.opened ?? null,
-          url: x.slug
-            ? `https://${pub.replace(/^https?:\/\//, "")}/p/${x.slug}`
-            : `https://${pub.replace(/^https?:\/\//, "")}/publish/post/${x.id}`,
-          editorUrl: `https://${pub.replace(/^https?:\/\//, "")}/publish/post/${x.id}`,
-        };
-      };
+      const item = (x, published) => ({
+        id: x.id,
+        title: x.draft_title || x.title,
+        updated: x.draft_updated_at,
+        date: x.post_date || x.draft_updated_at,
+        published: published || !!x.is_published,
+        audience: x.audience,
+        slug: x.slug || null,
+        cover: x.cover_image || null,
+        likes: x.reaction_count ?? null,
+        comments: (x.comment_count ?? 0) + (x.child_comment_count ?? 0),
+        views: x.stats?.views ?? x.stats?.opened ?? null,
+        url: x.slug
+          ? `https://${pub.replace(/^https?:\/\//, "")}/p/${x.slug}`
+          : `https://${pub.replace(/^https?:\/\//, "")}/publish/post/${x.id}`,
+        editorUrl: `https://${pub.replace(/^https?:\/\//, "")}/publish/post/${x.id}`,
+      });
       return send(res, 200, {
         drafts: (d.posts || []).map((x) => item(x, x.is_published)),
         published: (p.posts || []).map((x) => item(x, true)),
@@ -886,4 +867,4 @@ const server = http.createServer(async (req, res) => {  try {
   }
 });
 
-server.listen(PORT, () => console.log(`reviewer on http://localhost:${PORT} (PUB=${process.env.PUB || "?"})`));
+server.listen(PORT, () => console.log(`typohunter on http://localhost:${PORT} (PUB=${process.env.PUB || "?"})`));

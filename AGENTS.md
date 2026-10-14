@@ -1,4 +1,4 @@
-# AGENTS.md — SubstackDraftReviewer
+# AGENTS.md — TypoHunter
 
 Local-first web reviewer for Substack drafts: fetch draft → Groq proofread (typos only) →
 per-fix accept/reject diff UI → push back via internal API. No deps, no build, no tests.
@@ -64,8 +64,7 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
   ledger; apply records resulting paragraphs as reviewed-empty (no re-offer,
   no re-proofread loop). Prompt/model change retires old verdicts
   (re-proofread lazily). Media placeholder id is the marker-bytes hash
-  (`prompts/media.yaml`), never a positional counter. Library list shows
-  cache-only `reviewedPct` (null = unopened, never fetch bodies for it).
+  (`prompts/media.yaml`), never a positional counter.
 - Frozen benchmark corpus: `testdata/corpus/` (47 posts, manifest +
   corpusHash, `FROZEN.txt`) — NEVER regenerate or "fix"; author keeps typos
   as test material. A/B context experiment: `scripts/ab-context.mjs`

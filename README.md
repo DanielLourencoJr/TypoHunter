@@ -1,4 +1,4 @@
-# Substack Draft Reviewer
+# TypoHunter
 
 Local-first web app that proofreads Substack drafts without breaking formatting:
 fetch a draft → AI suggests typo-level fixes → accept/reject each one in a

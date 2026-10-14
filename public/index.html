@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Revisor de Rascunhos — Substack</title>
-<script>try{var t=localStorage.getItem('sdr_theme')||'light';document.documentElement.dataset.theme=t;if(t==='dark')document.documentElement.classList.add('dark');}catch(e){document.documentElement.dataset.theme='light';}</script>
+<title>TypoHunter — Revisor de Rascunhos</title>
+<script>try{var t=localStorage.getItem('th_theme')||'light';document.documentElement.dataset.theme=t;if(t==='dark')document.documentElement.classList.add('dark');}catch(e){document.documentElement.dataset.theme='light';}</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
@@ -322,7 +322,7 @@ a { color: var(--accent); }
 <body>
 <div class="topbar sticky top-0 z-10 py-3 backdrop-blur" id="topbar" style="display:none;background:color-mix(in srgb, var(--bg) 88%, transparent)">
   <button id="back" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-stone-200 hover:bg-stone-300 dark:bg-stone-800 dark:hover:bg-stone-700 dark:text-stone-100" style="display:none">← Voltar</button>
-  <h1>Revisor de Rascunhos <small>para Substack · só corrige typos, nunca sua voz</small></h1>
+  <h1>TypoHunter <small>revisor de rascunhos · só corrige typos, nunca sua voz</small></h1>
   <span id="status" class="pill">pronto</span>
   <span class="spacer"></span>
   <button id="theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button>
@@ -464,7 +464,7 @@ a { color: var(--accent); }
 <div id="welcome">
   <div class="dialog ring-1 ring-black/5 dark:ring-white/10">
     <p class="font-ui text-xs uppercase tracking-widest opacity-60">Substack · revisão de texto</p>
-    <h1 class="font-text">Revisor de Rascunhos</h1>
+    <h1 class="font-text">TypoHunter</h1>
     <p>Seus textos do Substack revisados sem copiar e colar: a ferramenta lê seu
     rascunho, sugere <strong>apenas</strong> correções de typos e gramática —
     sem mexer na sua voz, estrutura ou imagens — e você aprova cada uma antes
@@ -487,7 +487,7 @@ function toggleTheme() {
   const next = currentTheme() === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
   document.documentElement.classList.toggle('dark', next === 'dark');
-  try { localStorage.setItem('sdr_theme', next); } catch {}
+  try { localStorage.setItem('th_theme', next); } catch {}
   paintThemeBtn();
 }
 const S = { ref: null, pub: '', posts: null, cur: null, decisions: {}, groupDeselect: new Set(), editorUrl: null, isPublished: false, lastApplied: 0, admin: null };
@@ -495,7 +495,7 @@ function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = 'pil
 function showErr(m, where) { const el = $(where); if (el) { el.style.display = 'block'; el.textContent = m; } setStatus('erro', 'err'); }
 function clearErrs() { document.querySelectorAll('.err').forEach(e => { e.style.display = 'none'; e.textContent = ''; }); }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function H() { const h = {}; if (S.pub) { h['x-pub'] = S.pub; localStorage.setItem('sdr_pub', S.pub); } return h; }
+function H() { const h = {}; if (S.pub) { h['x-pub'] = S.pub; localStorage.setItem('th_pub', S.pub); } return h; }
 function EQ() { return `?edition=${encodeURIComponent((S.cur && S.cur.edition) || 'original')}`; }
 function showView(name, push) {
   if (push !== false && CUR && CUR !== name) NAV.push(CUR);
@@ -753,12 +753,12 @@ function embedBlocks(bodyMd, placements) {
 /* ---------- onboarding ---------- */
 $('w-go').onclick = () => { S.admin = null; $('welcome').classList.remove('on'); document.body.classList.remove('bare'); bootProfile(); };
 function bootProfile() {
-  const saved = localStorage.getItem('sdr_ref');
+  const saved = localStorage.getItem('th_ref');
   if (saved) {
     try {
       S.ref = JSON.parse(saved);
       return enterWithRef(S.ref);
-    } catch { localStorage.removeItem('sdr_ref'); }
+    } catch { localStorage.removeItem('th_ref'); }
   }
   showView('profile');
   $('refinput').focus();
@@ -776,7 +776,7 @@ async function submitRef() {
     const j = await r.json();
     if (j.error) throw new Error(j.error + ' — confira o link e tente de novo.');
     S.ref = j;
-    localStorage.setItem('sdr_ref', JSON.stringify(j));
+    localStorage.setItem('th_ref', JSON.stringify(j));
     await enterWithRef(j);
   } catch (e) { showErr(e.message, 'err-prof'); }
   finally { $('refgo').disabled = false; setStatus('pronto'); }
@@ -788,7 +788,7 @@ async function enterWithRef(ref) {
     try {
       const r = await fetch('/api/resolve?input=' + encodeURIComponent(ref.handle + '.substack.com'));
       const j = await r.json();
-      if (!j.error) { pub = j.host; S.ref = j; localStorage.setItem('sdr_ref', JSON.stringify(j)); }
+      if (!j.error) { pub = j.host; S.ref = j; localStorage.setItem('th_ref', JSON.stringify(j)); }
     } catch { /* segue sem pub: mostra tutorial genérico */ }
   }
   S.pub = pub;
@@ -855,8 +855,8 @@ function fmtStat(v) { return v == null ? '—' : String(v); }
 function libCard(p) {
   const cover = p.cover ? `<img class="cover" src="${esc(p.cover)}" loading="lazy" alt="" />` : `<div class="nocover">sem capa</div>`;
   const stats = p.published
-    ? `<div class="stats"><span>👁 ${fmtStat(p.views)}</span><span>♥ ${fmtStat(p.likes)}</span><span>💬 ${p.comments ?? '—'}</span>${p.restacks != null ? `<span>🔁 ${p.restacks}</span>` : ''}${p.reviewedPct != null ? `<span title="texto já revisado (nesta versão do prompt)">✓ ${p.reviewedPct}%</span>` : ''}</div>`
-    : `<div class="stats"><span>${esc(p.audience || 'everyone')}</span>${p.reviewedPct != null ? `<span title="texto já revisado (nesta versão do prompt)">✓ ${p.reviewedPct}%</span>` : ''}</div>`;
+    ? `<div class="stats"><span>👁 ${fmtStat(p.views)}</span><span>♥ ${fmtStat(p.likes)}</span><span>💬 ${p.comments ?? '—'}</span>${p.restacks != null ? `<span>🔁 ${p.restacks}</span>` : ''}</div>`
+    : `<div class="stats"><span>${esc(p.audience || 'everyone')}</span></div>`;
   return `<button class="libcard transition duration-150 hover:-translate-y-0.5 hover:shadow-xl" data-id="${p.id}">${cover}<div class="pad"><h4>${esc(p.title || '(sem título)')}</h4>` +
     `<small>${fmtDate(p.date)}${p.slug ? ' · /' + esc(p.slug) : ''}${p.words != null ? ` · ${p.words} palavras` : ''}</small>${stats}</div></button>`;
 }
@@ -1310,7 +1310,7 @@ $('adm-go').onclick = async () => {
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     S.admin = { key: password };
-    try { sessionStorage.setItem('sdr_adm_key', password); } catch {}
+    try { sessionStorage.setItem('th_adm_key', password); } catch {}
     $('adm-pass').value = '';
     enterAdminLibrary();
   } catch (e) { showErr(e.message === 'bad password' ? 'Senha incorreta.' : e.message, 'err-admgate'); }
@@ -1371,7 +1371,7 @@ function enterAdminRoute() {
   $('welcome').classList.remove('on');
   document.body.classList.remove('bare');
   let key = null;
-  try { key = sessionStorage.getItem('sdr_adm_key'); } catch {}
+  try { key = sessionStorage.getItem('th_adm_key'); } catch {}
   if (key) { S.admin = { key }; enterAdminLibrary(); }
   else showView('admingate');
 }
