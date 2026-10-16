@@ -23,11 +23,13 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
 
 - `.env` (gitignored) holds `SUBSTACK_SID` + `GROQ_API_KEY` + `GROQ_MODEL=openai/gpt-oss-120b`.
   Optional second provider: `GEMINI_API_KEY` (+`GEMINI_MODEL`, default
-  `gemini-3.6-flash` — newest flash that answers reliably; 3.7/3.8 503).
-  Gemini runs with `reasoning_effort: "none"` (thinking tokens billed + slow;
-  ~6x cheaper, quality gate unaffected). `LLM_ORDER` (default `gemini,groq` —
-  Gemini leads because the quality gate showed Groq repeatedly editing correct
-  prose; Groq covers Gemini's cap and has better raw recall) sets failover order; only keys
+  `gemini-3.5-flash-lite` — the non-lite flash models get only **20 RPD** free
+  (~4 posts/day, useless); the lite models get 500). Gemini runs with
+  `reasoning_effort: "low"` — the lite models REJECT `"none"` (503/400);
+  the non-lite flashes accept `"none"` and are ~6x cheaper with it. `LLM_ORDER`
+  (default `gemini,groq` — Gemini leads because the quality gate showed Groq
+  repeatedly editing correct prose; Groq covers Gemini's cap and has better
+  raw recall) sets failover order; only keys
   present are used, none at all = heuristic demo. Daily-cap 429s fail over,
   never retried. Per-provider daily spend lands in `data/llm-usage.json`
   (gitignored, best-effort).
