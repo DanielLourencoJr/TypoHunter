@@ -10,7 +10,7 @@ import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./
 import { providersFromEnv } from "./lib/llm.js";
 import {
   splitParagraphs, paraHash, promptVersion,
-  partitionParagraphs, groupNewUnits, proofreadText,
+  partitionParagraphs, groupNewUnits, uniqueUnits, proofreadText,
   attributeSuggestions, mergeLedgerSuggestions,
   filterSuggestions,
 } from "./lib/proofread.js";
@@ -660,7 +660,9 @@ const server = http.createServer(async (req, res) => {  try {
         models: providers.length ? providers.map((p) => p.model) : ["heuristic"],
         promptHash: ver.hash,
       };
-      const estNew = partitionParagraphs(masked, es.reviewed, vintage).newUnits.length;
+      // estChunks must equal the progress unit total: both branches advance
+      // per unique paragraph (duplicate-hash paragraphs count once).
+      const estNew = uniqueUnits(partitionParagraphs(masked, es.reviewed, vintage).newUnits).length;
       const job = enqueueAnalysis("proofread", Math.max(estNew, 1), async (progress) => {
         const fresh = loadStore(id);
         const fes = fresh?.editions?.[edition];
@@ -669,6 +671,7 @@ const server = http.createServer(async (req, res) => {  try {
         const cur = latestMarkdown(fes);
         const { masked: curMasked, count: maskedCount } = maskOpaque(cur);
         const { units, newUnits } = partitionParagraphs(curMasked, fes.reviewed, vintage);
+        const uniqNew = uniqueUnits(newUnits);
         const at = new Date().toISOString();
         const jobUsage = { tokens: 0, calls: 0, providers: {} };
         const noteUsage = (name, tokens) => {
@@ -684,14 +687,14 @@ const server = http.createServer(async (req, res) => {  try {
           // attribute its verdicts to the new units like model output.
           const result = await proofreadMarkdown(cur, { language });
           const buckets = {};
-          for (const u of newUnits) buckets[u.hash] = [];
+          for (const u of uniqNew) buckets[u.hash] = [];
           for (const s of result.suggestions) {
-            for (const u of newUnits) {
+            for (const u of uniqNew) {
               if (u.para.includes(s.original)) buckets[u.hash].push(s);
             }
           }
           let doneCount = 0;
-          for (const u of newUnits) {
+          for (const u of uniqNew) {
             fes.reviewed[u.hash] = {
               suggestions: buckets[u.hash] || [],
               model: "heuristic", promptHash: vintage.promptHash, at, via: "llm",
@@ -703,7 +706,7 @@ const server = http.createServer(async (req, res) => {  try {
           const batches = groupNewUnits(newUnits);
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
           const servedModels = new Set();
-          let doneBatches = 0;
+          let doneUnits = 0;
           for (let b = 0; b < batches.length; b++) {
             if (b > 0) await sleep(3000); // TPM pacing, same as before
             const batchText = batches[b].map((u) => u.para).join("\n\n");
@@ -722,7 +725,8 @@ const server = http.createServer(async (req, res) => {  try {
                 model: servingModel, promptHash: vintage.promptHash, at, via: "llm",
               };
             }
-            progress(++doneBatches);
+            doneUnits += batches[b].length;
+            progress(doneUnits);
           }
           if (batches.length) {
             fes.mode = `ai:${[...servedModels].join("+")}${batches.length > 1 ? `×${batches.length}` : ""}${maskedCount ? `-${maskedCount}m` : ""}`;
