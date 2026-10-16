@@ -321,7 +321,7 @@ function edStore(store, edition, md) {
 const jobs = new Map();
 let jobSeq = 0;
 let queueRunning = false;
-let secPerChunk = 12; // calibrated by completed jobs (exponential moving average)
+let secPerChunk = 12; // fallback per-chunk seconds, calibrated by completed jobs (EMA)
 function enqueueAnalysis(kind, estChunks, run) {
   const job = {
     id: "j" + (++jobSeq), kind, run, status: "queued", enqueuedAt: Date.now(),
@@ -347,10 +347,23 @@ function queueAhead(job) {
   }
   return { aheadChunks, position };
 }
+// Observed pace of the running job (seconds per completed chunk). This beats
+// the cross-job EMA for the first run of a session and self-corrects within a
+// few chunks, so the ETA stops being wildly pessimistic. The >=2 guard skips
+// the cold-start chunk (server spawn / first API call), which is always slow.
+function currentSecPerChunk() {
+  let live = 0;
+  for (const j of jobs.values()) {
+    if (j.status !== "running" || !j.startedAt || j.doneChunks < 2) continue;
+    const r = (Date.now() - j.startedAt) / 1000 / j.doneChunks;
+    if (r > 0 && Number.isFinite(r)) live = live ? Math.min(live, r) : r;
+  }
+  return live || secPerChunk;
+}
 function jobEtaSec(job) {
   const { aheadChunks } = queueAhead(job);
   const own = Math.max(0, job.estChunks - job.doneChunks);
-  return Math.max(5, Math.round((aheadChunks + own) * secPerChunk));
+  return Math.max(5, Math.round((aheadChunks + own) * currentSecPerChunk()));
 }
 async function pumpQueue() {
   if (queueRunning) return;
@@ -365,7 +378,7 @@ async function pumpQueue() {
         next.result = await next.run((done) => { next.doneChunks = Math.max(next.doneChunks, done); });
         next.status = "done";
         const elapsed = (Date.now() - next.startedAt) / 1000;
-        secPerChunk = secPerChunk * 0.7 + (elapsed / Math.max(1, next.doneChunks || next.estChunks)) * 0.3;
+        secPerChunk = secPerChunk * 0.5 + (elapsed / Math.max(1, next.doneChunks || next.estChunks)) * 0.5;
       } catch (e) {
         next.status = "error";
         next.error = String((e && e.message) || e).slice(0, 500);

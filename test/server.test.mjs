@@ -226,3 +226,17 @@ test("queue: running job is counted ahead; ETA uses chunk estimate", () => {
   assert.equal(q.aheadChunks, 4);
   assert.ok(jobEtaSec(j2) >= 5);
 });
+
+test("queue: live pace of the running job lowers the ETA", () => {
+  const job = {
+    id: "jlivepace", kind: "t", status: "running", enqueuedAt: Date.now(),
+    startedAt: Date.now() - 40000, estChunks: 20, doneChunks: 2,
+    result: null, error: null, retryInSec: 0, finishedAt: 0,
+  };
+  jobs.set(job.id, job);
+  const slow = jobEtaSec(job); // ~20s per chunk so far
+  job.startedAt = Date.now() - 2000; // now ~1s per chunk
+  const fast = jobEtaSec(job);
+  jobs.delete(job.id);
+  assert.ok(fast < slow, `live fast pace (${fast}) should be below slow (${slow})`);
+});
