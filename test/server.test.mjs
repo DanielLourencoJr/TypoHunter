@@ -158,12 +158,15 @@ test("pubsFromProfile: normalizes publications and publicationUsers", () => {
   assert.deepEqual(pubsFromProfile({ publications: [{ publication: { id: 3 } }] }), []);
 });
 
-test("sidFrom: header wins, then env, else empty", () => {
+test("sidFrom: header wins, then SUBSTACK_SID, then REVIEWER_SID, else empty", () => {
   assert.equal(sidFrom({ headers: { "x-substack-sid": "abc" } }), "abc");
   withEnv({ SUBSTACK_SID: "envsid" }, () => {
     assert.equal(sidFrom({ headers: {} }), "envsid");
   });
-  withEnv({ SUBSTACK_SID: undefined }, () => {
+  withEnv({ SUBSTACK_SID: undefined, REVIEWER_SID: "rev" }, () => {
+    assert.equal(sidFrom({ headers: {} }), "rev");
+  });
+  withEnv({ SUBSTACK_SID: undefined, REVIEWER_SID: undefined }, () => {
     assert.equal(sidFrom({ headers: {} }), "");
   });
 });

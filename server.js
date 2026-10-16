@@ -77,7 +77,9 @@ function sidFrom(req) {
   const h = req.headers["x-substack-sid"];
   if (h) return String(h);
   if (process.env.SUBSTACK_SID) return process.env.SUBSTACK_SID;
-  return "";
+  // Contributor model: the service's reviewer SID is the identity that reads
+  // and edits the client's drafts, so fall back to it when no personal SID.
+  return process.env.REVIEWER_SID || "";
 }
 // Reviewer (service) identity for the contributor model. Falls back to the
 // personal SID while a dedicated reviewer account doesn't exist yet.
@@ -533,7 +535,7 @@ const server = http.createServer(async (req, res) => {  try {
     if (req.method === "GET" && url.pathname === "/api/posts") {
       const sid = sidFrom(req);
       let pub = pubFrom(req, null, url.searchParams);
-      if (!sid) return send(res, 401, { error: "missing SID: paste it in UI or set SUBSTACK_SID in .env" });
+      if (!sid) return send(res, 401, { error: "missing SID: set REVIEWER_SID (or SUBSTACK_SID) in .env" });
       if (!pub) {
         // derive: if SID owns exactly 1 publication, use it; else ask to choose
         const profile = await fetchProfileSelf(sid);
