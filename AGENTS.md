@@ -22,6 +22,12 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
 ## Credentials (never print, never commit)
 
 - `.env` (gitignored) holds `SUBSTACK_SID` + `GROQ_API_KEY` + `GROQ_MODEL=openai/gpt-oss-120b`.
+  Optional second provider: `GEMINI_API_KEY` (+`GEMINI_MODEL`, default
+  `gemini-2.5-flash`). `LLM_ORDER` (default `groq,gemini` — TEMPORARY, Groq
+  first until the Gemini quality gate passes) sets failover order; only keys
+  present are used, none at all = heuristic demo. Daily-cap 429s fail over,
+  never retried. Per-provider daily spend lands in `data/llm-usage.json`
+  (gitignored, best-effort).
   `REVIEWER_SID` is the service (contributor-model) identity; central vault keeps
   `SUBSTACK_SID_REVIEWER` + `SUBSTACK_USERID_REVIEWER` + `SUBSTACK_HANDLE_REVIEWER`.
   Experiments use the TEST account: `/mnt/HD/Junior/Projects/.substack.test.env`

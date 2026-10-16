@@ -1153,6 +1153,7 @@ function renderReview(scroll) {
     const pendingItems = activeItems.filter(x => !x.decision);
     const selectedPending = pendingItems.filter(x => itemSelected(x));
     const reasons = [...new Set(activeItems.map(x => x.s.reason).filter(Boolean))].join(', ');
+    const models = [...new Set(activeItems.map(x => x.s.model).filter(Boolean))].join(', ');
     const indices = activeItems.map(x => x.k + 1).join(', ');
     const ids = pendingItems.map(x => x.s.id).join(',');
     const acceptLabel = selectedPending.length === pendingItems.length
@@ -1163,7 +1164,7 @@ function renderReview(scroll) {
       line: source.start,
       span: range,
       html: `<div class="sugwidget grouped${pendingItems.length ? '' : ' dec-y'}"${pendingItems.length ? ' data-pending="1"' : ''}>` +
-        `<div class="hunkhead">passagem · correções ${indices}${reasons ? ` · ${esc(reasons)}` : ''}${pendingItems.length ? ` · ${pendingItems.length} pendente${pendingItems.length > 1 ? 's' : ''}` : ' · aceitas'}</div>` +
+        `<div class="hunkhead">passagem · correções ${indices}${reasons ? ` · ${esc(reasons)}` : ''}${models ? ` · ${esc(models)}` : ''}${pendingItems.length ? ` · ${pendingItems.length} pendente${pendingItems.length > 1 ? 's' : ''}` : ' · aceitas'}</div>` +
         `<div class="diff">${pendingItems.length ? `<div class="dold"><span class="sign">−</span><span>${diff.oldHtml}</span></div>` : ''}` +
         `<div class="dnew"><span class="sign">+</span><span>${diff.newHtml}</span></div></div>` +
         (pendingItems.length ? `<div class="decbar"><button class="btn-y" data-accept-group="${ids}"${selectedPending.length ? '' : ' disabled'}>✓ ${acceptLabel}</button>` +

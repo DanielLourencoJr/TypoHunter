@@ -7,6 +7,7 @@ import { getDraft, listDrafts, listPublished, updateDraft, publishDraft, transla
 import { draftToMarkdown, tiptapToMarkdown } from "../SubstackCLI/lib/convert.js";
 import { parseFrontmatter, stringifyFrontmatter } from "../SubstackCLI/lib/frontmatter.js";
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
+import { providersFromEnv } from "./lib/llm.js";
 import {
   splitParagraphs, paraHash, promptVersion, defaultModel,
   partitionParagraphs, groupNewUnits, proofreadText,
@@ -18,6 +19,22 @@ import { htmlToMarkdown } from "../SubstackKit/lib/convert/html_to_md.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
 const DATA = path.join(ROOT, "data");
+
+// Best-effort per-provider daily usage counters (gitignored). Lets the
+// operator see which key is burning and how fast: { date, providers: {...} }.
+function recordUsage(providerName, tokens) {
+  try {
+    const f = path.join(DATA, "llm-usage.json");
+    const today = new Date().toISOString().slice(0, 10);
+    let u = {};
+    try { u = JSON.parse(fs.readFileSync(f, "utf8")); } catch { /* start fresh */ }
+    if (u.date !== today) u = { date: today, providers: {} };
+    u.providers[providerName] = u.providers[providerName] || { tokens: 0, calls: 0 };
+    u.providers[providerName].tokens += tokens || 0;
+    u.providers[providerName].calls += 1;
+    fs.writeFileSync(f, JSON.stringify(u), "utf8");
+  } catch { /* stats must never break a proofread */ }
+}
 
 // --- minimal .env loader (no deps) ---
 function loadEnv() {
@@ -499,8 +516,7 @@ const server = http.createServer(async (req, res) => {  try {
       const { masked: admMasked } = maskOpaque(text);
       const job = enqueueAnalysis("admin", splitChunks(admMasked).length, async (progress) => {
         const result = await proofreadMarkdown(text, {
-          apiKey: process.env.GROQ_API_KEY,
-          model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+          providers: providersFromEnv(),
           onUsage: (u) => progress(u.chunk),
         });
         return {
@@ -635,11 +651,16 @@ const server = http.createServer(async (req, res) => {  try {
       if (!es) return send(res, 404, { error: "open the post edition first (GET /api/posts/:id?edition=…)" });
       const md = latestMarkdown(es);
       const { masked } = maskOpaque(md);
-      // Ledger vintage: model name + prompt hash. A prompt/model change
-      // retires old verdicts — those paragraphs count as new (re-proofread).
-      const model = process.env.GROQ_MODEL || defaultModel();
+      // Ledger vintage: serving-model ids + prompt hash. A prompt/model
+      // change retires old verdicts — those paragraphs count as new.
+      // Provider order (LLM_ORDER, default groq,gemini) is TEMPORARY until
+      // the Gemini quality gate passes; see lib/llm.js.
+      const providers = providersFromEnv();
       const ver = promptVersion(language);
-      const vintage = { model: process.env.GROQ_API_KEY ? model : "heuristic", promptHash: ver.hash };
+      const vintage = {
+        models: providers.length ? providers.map((p) => p.model) : ["heuristic"],
+        promptHash: ver.hash,
+      };
       const estNew = partitionParagraphs(masked, es.reviewed, vintage).newUnits.length;
       const job = enqueueAnalysis("proofread", Math.max(estNew, 1), async (progress) => {
         const fresh = loadStore(id);
@@ -650,7 +671,16 @@ const server = http.createServer(async (req, res) => {  try {
         const { masked: curMasked, count: maskedCount } = maskOpaque(cur);
         const { units, newUnits } = partitionParagraphs(curMasked, fes.reviewed, vintage);
         const at = new Date().toISOString();
-        if (!process.env.GROQ_API_KEY) {
+        const jobUsage = { tokens: 0, calls: 0, providers: {} };
+        const noteUsage = (name, tokens) => {
+          jobUsage.tokens += tokens || 0;
+          jobUsage.calls += 1;
+          jobUsage.providers[name] = jobUsage.providers[name] || { tokens: 0, calls: 0 };
+          jobUsage.providers[name].tokens += tokens || 0;
+          jobUsage.providers[name].calls += 1;
+          recordUsage(name, tokens);
+        };
+        if (!providers.length) {
           // Heuristic demo path is local + instant: run whole-text once and
           // attribute its verdicts to the new units like model output.
           const result = await proofreadMarkdown(cur, { language });
@@ -665,37 +695,52 @@ const server = http.createServer(async (req, res) => {  try {
           for (const u of newUnits) {
             fes.reviewed[u.hash] = {
               suggestions: buckets[u.hash] || [],
-              model: vintage.model, promptHash: vintage.promptHash, at, via: "llm",
+              model: "heuristic", promptHash: vintage.promptHash, at, via: "llm",
             };
             progress(++doneCount);
           }
         } else {
           const batches = groupNewUnits(newUnits);
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+          const servedModels = new Set();
+          let doneBatches = 0;
           for (let b = 0; b < batches.length; b++) {
             if (b > 0) await sleep(3000); // TPM pacing, same as before
             const batchText = batches[b].map((u) => u.para).join("\n\n");
-            const found = await proofreadText(batchText, {
-              apiKey: process.env.GROQ_API_KEY,
-              model, language,
-              system: ver.system, template: ver.template,
-              onUsage: (u) => progress(u.chunk),
-            });
+            // Quota-exhausted falls over to the next provider inside.
+            const { suggestions: found, model: servingModel, provider: servingName, tokens } =
+              await proofreadText(batchText, {
+                providers, language,
+                system: ver.system, template: ver.template,
+              });
+            noteUsage(servingName, tokens);
+            servedModels.add(servingModel);
             const byHash = attributeSuggestions(found, batches[b], b);
             for (const u of batches[b]) {
               fes.reviewed[u.hash] = {
                 suggestions: byHash[u.hash] || [],
-                model: vintage.model, promptHash: vintage.promptHash, at, via: "llm",
+                model: servingModel, promptHash: vintage.promptHash, at, via: "llm",
               };
             }
+            progress(++doneBatches);
           }
           if (batches.length) {
-            fes.mode = `ai:${model}${batches.length > 1 ? `×${batches.length}` : ""}${maskedCount ? `-${maskedCount}m` : ""}`;
+            fes.mode = `ai:${[...servedModels].join("+")}${batches.length > 1 ? `×${batches.length}` : ""}${maskedCount ? `-${maskedCount}m` : ""}`;
           }
         }
-        fes.suggestions = filterSuggestions(cur, mergeLedgerSuggestions(units, fes.reviewed, vintage)).slice(0, 200);
+        // Stamp each suggestion with its ledger entry's serving model
+        // (uniform vintage by construction — header label in the UI).
+        const merged = filterSuggestions(cur, mergeLedgerSuggestions(units, fes.reviewed, vintage)).slice(0, 200);
+        const entryOf = (id) => {
+          for (const u of units) {
+            const e = fes.reviewed[u.hash];
+            if (e && (e.suggestions || []).some((x) => x.id === id)) return e;
+          }
+          return null;
+        };
+        fes.suggestions = merged.map((s) => ({ ...s, model: entryOf(s.id)?.model || vintage.models[0] }));
         saveStore(id, fresh);
-        return { suggestions: fes.suggestions, mode: fes.mode, baseVersion: fes.versions.length - 1 };
+        return { suggestions: fes.suggestions, mode: fes.mode, baseVersion: fes.versions.length - 1, usage: jobUsage };
       });
       const { position } = queueAhead(job);
       return send(res, 202, { jobId: job.id, position, etaSec: jobEtaSec(job) });
@@ -751,7 +796,8 @@ const server = http.createServer(async (req, res) => {  try {
       es.reviewed = es.reviewed || {};
       const lang = edition === "original" ? null : edition;
       const aver = promptVersion(lang);
-      const amodel = process.env.GROQ_API_KEY ? (process.env.GROQ_MODEL || defaultModel()) : "heuristic";
+      const aproviders = providersFromEnv();
+      const amodel = aproviders.length ? aproviders[0].model : "heuristic";
       const { masked: nextMasked } = maskOpaque(next);
       const at = new Date().toISOString();
       const kept = {};

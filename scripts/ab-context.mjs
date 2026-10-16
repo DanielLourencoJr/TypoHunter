@@ -73,13 +73,15 @@ async function main() {
       const usage = { solo: null, ctx: null };
       // Sequential on purpose: protects the TPM budget; pacing between calls.
       const tA = Date.now();
-      const sugA = await proofreadText(paras[i], {
+      const rA = await proofreadText(paras[i], {
         apiKey, model, onUsage: (u) => { usage.solo = u; },
       });
+      const sugA = rA.suggestions;
       await sleep(pace);
-      const sugB = await proofreadText(formatTarget(paras[i], ctx), {
+      const rB = await proofreadText(formatTarget(paras[i], ctx), {
         apiKey, model, onUsage: (u) => { usage.ctx = u; },
       });
+      const sugB = rB.suggestions;
       await sleep(pace);
       calls += 2;
       res.tokens.solo += usage.solo?.total || 0;

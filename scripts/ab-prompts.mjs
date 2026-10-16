@@ -75,7 +75,7 @@ async function main() {
       const useCtx = v === "context" || v === "strict-ctx";
       const text = useCtx ? formatTarget(paras[i], ctx) : paras[i];
       let usage = null;
-      const sug = await proofreadText(text, {
+      const { suggestions: sug } = await proofreadText(text, {
         apiKey, model, system: systems[v], template: ver.template,
         onUsage: (u) => { usage = u; },
       });
