@@ -1,17 +1,23 @@
 # AGENTS.md — TypoHunter
 
 Local-first web reviewer for Substack drafts: fetch draft → Groq proofread (typos only) →
-per-fix accept/reject diff UI → push back via internal API. No deps, no build, no tests.
+per-fix accept/reject diff UI → push back via internal API. No deps, no build.
 
 ## Run / verify
 
 - `npm run dev` (nodemon, watches `server.js`/`lib`/`public`, ignores `data/`) →
   `http://localhost:5179`. UI-only edits (`public/index.html`,
   served from disk per request, `no-store`) need no restart either way.
-- No test suite. Verify with `node --check <file>`. For `public/index.html`,
-  extract the `<script>` block and `node --check` it; logic-test pure functions
-  by evaluating the extracted script in node with DOM stubs
-  (`document.querySelectorAll/getElementById`), never by copying functions.
+- `npm test` (`node --test test/`, builtin `node:test`, no deps): `test/llm.test.mjs`
+  (mocked `fetch`: 429 daily-vs-minute, 5xx/network transient, provider order),
+  `test/proofread.test.mjs` (YAML/prompt, `maskOpaque` id stability, paragraph
+  hashing, filtering, failover), `test/ui.test.mjs` (the real inline `<script>`
+  evaluated in `node:vm` with DOM stubs — never copy functions),
+  `test/server.test.mjs` (store migration, snapshots, queue ETA — needs the
+  main-guard so importing `server.js` does not bind a port), and
+  `test/corpus.test.mjs` (re-derives the frozen corpus hashes; never regenerates).
+  Still run `node --check <file>` on edits; for `public/index.html`, extract the
+  `<script>` block and `node --check` it.
 - Sibling lib reused via relative import: `../SubstackCLI/lib/{drafts,convert,md,frontmatter,auth}.js`.
   Public-post HTML uses `../SubstackKit/lib/convert/html_to_md.js` (tested,
   captions preserved). Never reimplement converters; run node from this repo

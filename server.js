@@ -917,4 +917,26 @@ const server = http.createServer(async (req, res) => {  try {
   }
 });
 
-server.listen(PORT, () => console.log(`typohunter on http://localhost:${PORT} (PUB=${process.env.PUB || "?"})`));
+// Only bind a port when this file is the process entrypoint. Tests import the
+// module to exercise its pure helpers, and must not open a socket. realpath
+// comparison keeps `nodemon server.js` working when the repo is reached
+// through a symlinked path (see AGENTS.md).
+function isDirectRun() {
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+if (isDirectRun()) {
+  server.listen(PORT, () => console.log(`typohunter on http://localhost:${PORT} (PUB=${process.env.PUB || "?"})`));
+}
+
+export {
+  recordUsage, loadEnv, envFresh, sidFrom, reviewerSid, pubFrom, pubsFromProfile,
+  feedTitle, resolveSubstackRef, publicationRef, send, readJson,
+  storePath, loadStore, saveStore, latestMarkdown,
+  snapOf, sameSnap, snapOfVersion, editionParam, editionMarkdown,
+  blankEdStore, migrateStore, edStore,
+  enqueueAnalysis, queueAhead, jobEtaSec, pumpQueue, jobs, server,
+};
