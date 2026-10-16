@@ -2,10 +2,10 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { fetchProfileSelf } from "../SubstackCLI/lib/auth.js";
-import { getDraft, listDrafts, listPublished, updateDraft, publishDraft, translateDraft } from "../SubstackCLI/lib/drafts.js";
-import { draftToMarkdown, tiptapToMarkdown } from "../SubstackCLI/lib/convert.js";
-import { parseFrontmatter, stringifyFrontmatter } from "../SubstackCLI/lib/frontmatter.js";
+import { fetchProfileSelf } from "./lib/substack-cli/auth.js";
+import { getDraft, listDrafts, listPublished, updateDraft, publishDraft, translateDraft } from "./lib/substack-cli/drafts.js";
+import { draftToMarkdown, tiptapToMarkdown } from "./lib/substack-cli/convert.js";
+import { parseFrontmatter, stringifyFrontmatter } from "./lib/substack-cli/frontmatter.js";
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
 import { providersFromEnv } from "./lib/llm.js";
 import { stopOpencodeServer } from "./lib/opencode-server.js";
@@ -15,7 +15,7 @@ import {
   attributeSuggestions, mergeLedgerSuggestions,
   filterSuggestions,
 } from "./lib/proofread.js";
-import { htmlToMarkdown } from "../SubstackKit/lib/convert/html_to_md.js";
+import { htmlToMarkdown } from "./lib/substack-kit/convert/html_to_md.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
@@ -524,7 +524,7 @@ const server = http.createServer(async (req, res) => {  try {
       if (!r.ok || !post || !post.body_html) return send(res, 404, { error: "post not found or paywalled" });
       const title = post.title || slug;
       const subtitle = post.subtitle || "";
-      // Public HTML -> Markdown via SubstackKit's tested converter
+      // Public HTML -> Markdown via the vendored SubstackKit converter.
       // (analysis-only: admin results are never applied or pushed).
       // Same input shape the writer flow sends, captions included.
       const text = htmlToMarkdown(post.body_html).slice(0, 200000);

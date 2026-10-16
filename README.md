@@ -13,7 +13,8 @@ npm install            # nodemon for auto-restart during development
 npm run dev            # http://localhost:5179 (restarts on code changes)
 ```
 
-No runtime dependencies (nodemon is dev-only), no build step. Node.js 18+.
+TypoHunter is self-contained: no sibling repositories are needed. It has no
+runtime dependencies (nodemon is dev-only) and no build step. Node.js 18+.
 
 ## Configuration (`.env`)
 
@@ -45,3 +46,11 @@ copy the `substack.sid` value while logged into Substack.
 
 Edits made directly in the Substack editor are picked up automatically as
 `synced from Substack` versions when the post is reopened.
+
+## Tests and CI
+
+Run `npm test` for unit and integration tests, then `npm run test:e2e` for the
+main draft review workflow. The end-to-end test uses a mocked Substack API and
+needs no credentials. GitHub Actions runs both commands on Node.js 18, 20, and
+22. Vendored Substack library sources and their upstream revisions are recorded
+in [`lib/VENDORED.md`](lib/VENDORED.md).

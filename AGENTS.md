@@ -9,7 +9,7 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
 - `npm run dev` (nodemon, watches `server.js`/`lib`/`public`, ignores `data/`) →
   `http://localhost:5179`. UI-only edits (`public/index.html`,
   served from disk per request, `no-store`) need no restart either way.
-- `npm test` (`node --test test/`, builtin `node:test`, no deps): `test/llm.test.mjs`
+- `npm test` (builtin `node:test`, no deps): `test/llm.test.mjs`
   (mocked `fetch`: 429 daily-vs-minute, 5xx/network transient, provider order),
   `test/proofread.test.mjs` (YAML/prompt, `maskOpaque` id stability, paragraph
   hashing, filtering, failover), `test/ui.test.mjs` (the real inline `<script>`
@@ -17,14 +17,16 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   `test/server.test.mjs` (store migration, snapshots, queue ETA — needs the
   main-guard so importing `server.js` does not bind a port), and
   `test/corpus.test.mjs` (re-derives the frozen corpus hashes; never regenerates).
+  `npm run test:e2e` starts the real server on loopback and exercises the draft
+  review flow against a mocked Substack API; no account or model key is used.
   Still run `node --check <file>` on edits; for `public/index.html`, extract the
   `<script>` block and `node --check` it.
-- Sibling lib reused via relative import: `../SubstackCLI/lib/{drafts,convert,md,frontmatter,auth}.js`.
-  Public-post HTML uses `../SubstackKit/lib/convert/html_to_md.js` (tested,
-  captions preserved). Never reimplement converters; run node from this repo
-  root so `../SubstackCLI` resolves. SubstackKit is read-only by design — the
-  writer flow's authenticated writes stay in SubstackCLI; never route our SID
-  through `substack-api`-backed paths (third-party gateway).
+- Substack conversion and API modules are vendored under `lib/substack-cli/`
+  and `lib/substack-kit/` so this repository runs standalone. They are copied
+  from the sibling projects with their upstream revisions recorded in
+  `lib/VENDORED.md`; preserve their behavior and update them from those sources
+  when needed. The writer flow uses direct authenticated requests; never route
+  our SID through `substack-api`-backed paths (third-party gateway).
 
 ## Credentials (never print, never commit)
 

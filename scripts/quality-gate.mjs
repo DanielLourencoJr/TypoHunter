@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadEnvFile } from "../../SubstackCLI/lib/auth.js";
+import { loadEnvFile } from "../lib/substack-cli/auth.js";
 import {
   maskOpaque, splitParagraphs, proofreadText, promptVersion,
 } from "../lib/proofread.js";

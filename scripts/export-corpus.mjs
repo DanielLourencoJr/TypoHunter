@@ -15,10 +15,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { loadEnvFile, fetchProfileSelf } from "../../SubstackCLI/lib/auth.js";
-import { getDraft, listDrafts, listPublished } from "../../SubstackCLI/lib/drafts.js";
-import { draftToMarkdown, tiptapToMarkdown } from "../../SubstackCLI/lib/convert.js";
-import { stringifyFrontmatter } from "../../SubstackCLI/lib/frontmatter.js";
+import { loadEnvFile, fetchProfileSelf } from "../lib/substack-cli/auth.js";
+import { getDraft, listDrafts, listPublished } from "../lib/substack-cli/drafts.js";
+import { draftToMarkdown, tiptapToMarkdown } from "../lib/substack-cli/convert.js";
+import { stringifyFrontmatter } from "../lib/substack-cli/frontmatter.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
