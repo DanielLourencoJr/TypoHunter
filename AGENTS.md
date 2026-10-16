@@ -25,8 +25,9 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build,
   Optional second provider: `GEMINI_API_KEY` (+`GEMINI_MODEL`, default
   `gemini-3.6-flash` — newest flash that answers reliably; 3.7/3.8 503).
   Gemini runs with `reasoning_effort: "none"` (thinking tokens billed + slow;
-  ~6x cheaper, quality gate unaffected). `LLM_ORDER` (default `groq,gemini` —
-  TEMPORARY, Groq first until the Gemini quality gate passes) sets failover order; only keys
+  ~6x cheaper, quality gate unaffected). `LLM_ORDER` (default `gemini,groq` —
+  Gemini leads because the quality gate showed Groq repeatedly editing correct
+  prose; Groq covers Gemini's cap and has better raw recall) sets failover order; only keys
   present are used, none at all = heuristic demo. Daily-cap 429s fail over,
   never retried. Per-provider daily spend lands in `data/llm-usage.json`
   (gitignored, best-effort).

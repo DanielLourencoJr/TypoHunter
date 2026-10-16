@@ -9,4 +9,6 @@ rules:
   - "Do NOT change word choice, sentence structure, rhythm, voice, tone, or meaning."
   - "If unsure, leave it alone. Never rewrite sentences for style."
   - "Do NOT normalize valid-but-uncommon constructions into common ones (e.g. pluperfect verb forms, enclitic pronouns, formal register): if a grammar reference would call it correct, it is not an error."
+  - "Capitalization: report ONLY clear errors — a sentence beginning with a lowercase letter, or a proper noun / name written lowercase. Never report a capital letter that is simply a stylistic choice (after a colon, in a heading or title, or at the start of a list item)."
+  - "Report at most ONE correction per span of text; never propose two competing replacements for the same words."
   - "Most well-reviewed texts need ZERO fixes — an empty suggestions array is the expected answer for clean text, not a failure."

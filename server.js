@@ -9,7 +9,7 @@ import { parseFrontmatter, stringifyFrontmatter } from "../SubstackCLI/lib/front
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
 import { providersFromEnv } from "./lib/llm.js";
 import {
-  splitParagraphs, paraHash, promptVersion, defaultModel,
+  splitParagraphs, paraHash, promptVersion,
   partitionParagraphs, groupNewUnits, proofreadText,
   attributeSuggestions, mergeLedgerSuggestions,
   filterSuggestions,
@@ -653,8 +653,7 @@ const server = http.createServer(async (req, res) => {  try {
       const { masked } = maskOpaque(md);
       // Ledger vintage: serving-model ids + prompt hash. A prompt/model
       // change retires old verdicts — those paragraphs count as new.
-      // Provider order (LLM_ORDER, default groq,gemini) is TEMPORARY until
-      // the Gemini quality gate passes; see lib/llm.js.
+      // Provider order comes from LLM_ORDER (see lib/llm.js for why Gemini leads).
       const providers = providersFromEnv();
       const ver = promptVersion(language);
       const vintage = {
@@ -699,6 +698,7 @@ const server = http.createServer(async (req, res) => {  try {
             };
             progress(++doneCount);
           }
+          fes.mode = `heuristic${maskedCount ? `-${maskedCount}m` : ""}`;
         } else {
           const batches = groupNewUnits(newUnits);
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
