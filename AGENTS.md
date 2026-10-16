@@ -102,6 +102,11 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   corpusHash, `FROZEN.txt`) — NEVER regenerate or "fix"; author keeps typos
   as test material. A/B context experiment: `scripts/ab-context.mjs`
   (solo vs read-only-neighbor arms, one paragraph per call both sides).
+  Larger OpenCode-only sweep: `scripts/opencode-sweep.mjs` — the free model is
+  uncapped so it scores many paragraphs, run CONCURRENTLY to stay quick
+  (`--limit`/`--concurrency`, deterministic even spread); it reports objective
+  facts only (valid JSON, edit counts, latency, tokens) and dumps the edits,
+  it does NOT assign correct/wrong verdicts (no authoritative labels exist).
 
 ## Styling
 
