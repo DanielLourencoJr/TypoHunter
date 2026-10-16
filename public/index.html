@@ -564,10 +564,14 @@ function restoreMedia(html, chips) {
   html = html.replace(/<p>\u0000MEDIA(\d+)\u0000<\/p>/g, (m, n) => `\u0000MEDIA${n}\u0000`);
   return html.replace(/\u0000MEDIA(\d+)\u0000/g, (m, n) => chips[Number(n)] ?? m);
 }
+function imageFigure(alt, src, title) {
+  const caption = title || alt;
+  return `<figure class="doc-image"><img alt="${esc(alt)}" src="${esc(src)}"${title ? ` title="${esc(title)}"` : ''} />${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>`;
+}
 function renderInline(s) {
   const images = [];
   s = String(s).replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (m, alt, src, title) => {
-    const i = images.push(`<figure class="doc-image"><img alt="${esc(alt)}" src="${esc(src)}"${title ? ` title="${esc(title)}"` : ''} />${title ? `<figcaption>${esc(title)}</figcaption>` : ''}</figure>`) - 1;
+    const i = images.push(imageFigure(alt, src, title)) - 1;
     return `\u0000INLINEIMG${i}\u0000`;
   });
   s = esc(s);
@@ -695,6 +699,19 @@ function inlineChange(text, start, end, sid, cls, selected) {
   return esc(text.slice(0, start)) +
     `<button type="button" class="change-fragment ${cls}${state}" data-toggle-change="${esc(sid)}" aria-pressed="${selected}">${esc(text.slice(start, end))}</button>` +
     esc(text.slice(end));
+}
+function extractDiffImages(text) {
+  const images = [];
+  const masked = String(text).replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (match, alt, src, title) => {
+    images.push(imageFigure(alt, src, title));
+    // Keep UTF-16 offsets stable so suggestion ranges after an image still
+    // point at the same text. Zero-width characters keep URLs out of the diff.
+    return '\u200b'.repeat(match.length);
+  });
+  return { text: masked, images };
+}
+function reviewImagePlacement(cardHtml, images) {
+  return (images.length ? `<div class="review-media">${images.join('')}</div>` : '') + cardHtml;
 }
 function combinedPassageDiff(passage, items) {
   const ops = [];
@@ -1146,7 +1163,8 @@ function renderReview(scroll) {
     const source = sourceParagraphs[paragraphIndex];
     if (!source) { skipped.push(...items.map(x => x.k + 1)); continue; }
     items.forEach(item => { item.selected = item.decision === 'y' || !S.groupDeselect.has(item.s.id); });
-    const diff = combinedPassageDiff(source.text, items);
+    const passage = extractDiffImages(source.text);
+    const diff = combinedPassageDiff(passage.text, items);
     const activeItems = diff.appliedItems;
     skipped.push(...items.filter(x => !activeItems.includes(x)).map(x => x.k + 1));
     if (!activeItems.length) continue;
@@ -1163,12 +1181,12 @@ function renderReview(scroll) {
     placements.push({
       line: source.start,
       span: range,
-      html: `<div class="sugwidget grouped${pendingItems.length ? '' : ' dec-y'}"${pendingItems.length ? ' data-pending="1"' : ''}>` +
+      html: reviewImagePlacement(`<div class="sugwidget grouped${pendingItems.length ? '' : ' dec-y'}"${pendingItems.length ? ' data-pending="1"' : ''}>` +
         `<div class="hunkhead">passagem · correções ${indices}${reasons ? ` · ${esc(reasons)}` : ''}${models ? ` · ${esc(models)}` : ''}${pendingItems.length ? ` · ${pendingItems.length} pendente${pendingItems.length > 1 ? 's' : ''}` : ' · aceitas'}</div>` +
         `<div class="diff">${pendingItems.length ? `<div class="dold"><span class="sign">−</span><span>${diff.oldHtml}</span></div>` : ''}` +
         `<div class="dnew"><span class="sign">+</span><span>${diff.newHtml}</span></div></div>` +
         (pendingItems.length ? `<div class="decbar"><button class="btn-y" data-accept-group="${ids}"${selectedPending.length ? '' : ' disabled'}>✓ ${acceptLabel}</button>` +
-        `<button class="btn-n" data-dec-n="${ids}">✗ Rejeitar todas</button></div>` : '') + `</div>`,
+        `<button class="btn-n" data-dec-n="${ids}">✗ Rejeitar todas</button></div>` : '') + `</div>`, passage.images),
     });
   }
   let html = embedBlocks(body, placements);

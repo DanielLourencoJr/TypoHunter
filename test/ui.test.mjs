@@ -109,6 +109,26 @@ T("renderInline: image figure, link, code, emphasis", () => {
   assert.match(out, /<strong>b<\/strong>/);
 });
 
+T("extractDiffImages: moves images out of the diff and keeps suggestion offsets", () => {
+  const source = 'before ![alt](https://example.test/image.png "subtitle") teh after';
+  const extracted = sandbox.extractDiffImages(source);
+  assert.equal(extracted.text.length, source.length);
+  assert.equal(extracted.images.length, 1);
+  assert.match(extracted.images[0], /<img alt="alt" src="https:\/\/example\.test\/image\.png"/);
+  assert.match(extracted.images[0], /<figcaption>subtitle<\/figcaption>/);
+  assert.doesNotMatch(extracted.text, /example\.test|subtitle/);
+
+  const diff = sandbox.combinedPassageDiff(extracted.text, [
+    { s: { id: "s-image", original: "teh", replacement: "the" }, selected: true },
+  ]);
+  assert.equal(diff.appliedItems.length, 1);
+  assert.doesNotMatch(diff.oldHtml + diff.newHtml, /example\.test|image\.png/);
+  assert.match(diff.oldHtml + diff.newHtml, /change-fragment/);
+
+  const placement = sandbox.reviewImagePlacement('<div class="sugwidget">suggestions</div>', extracted.images);
+  assert.ok(placement.indexOf('review-media') < placement.indexOf('sugwidget'));
+});
+
 T("renderMarkdown: headings, lists, quote, code, empty", () => {
   const md = "# Title\n\n**bold**\n\n- a\n- b\n\n> quote\n\n```\nx<y\n```";
   const out = sandbox.renderMarkdown(md);

@@ -1,6 +1,7 @@
 # AGENTS.md — TypoHunter
 
-Local-first web reviewer for Substack drafts: fetch draft → Groq proofread (typos only) →
+Local-first web reviewer for Substack drafts: fetch draft → LLM proofread (spelling/
+grammar/punctuation/caps only — never word choice, structure, or voice) →
 per-fix accept/reject diff UI → push back via internal API. No deps, no build.
 
 ## Run / verify
