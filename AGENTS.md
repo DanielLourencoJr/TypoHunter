@@ -17,10 +17,6 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   `test/server.test.mjs` (store migration, snapshots, queue ETA — needs the
   main-guard so importing `server.js` does not bind a port), and
   `test/corpus.test.mjs` (re-derives the frozen corpus hashes; never regenerates).
-  `npm run test:e2e` runs `e2e/workflow.test.mjs` against the real UI script and
-  local HTTP server with a stubbed Substack API and the no-key heuristic path;
-  it never uses account credentials or an LLM. GitHub Actions runs both suites
-  on Node 18, 20, and 22.
   Still run `node --check <file>` on edits; for `public/index.html`, extract the
   `<script>` block and `node --check` it.
 - Sibling lib reused via relative import: `../SubstackCLI/lib/{drafts,convert,md,frontmatter,auth}.js`.

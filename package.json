@@ -9,8 +9,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "node --test test/",
-    "test:e2e": "node --test e2e/"
+    "test": "node --test test/"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

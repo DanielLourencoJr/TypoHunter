@@ -45,12 +45,3 @@ copy the `substack.sid` value while logged into Substack.
 
 Edits made directly in the Substack editor are picked up automatically as
 `synced from Substack` versions when the post is reopened.
-
-## Tests and CI
-
-Run the built-in unit suite with `npm test` and the end-to-end draft review
-workflow with `npm run test:e2e`. The end-to-end test serves the real app and
-executes its inline UI script against the local server, while a local Substack
-API stub keeps it independent of account credentials and model providers.
-GitHub Actions runs both suites on Node.js 18, 20, and 22 for pushes and pull
-requests.
