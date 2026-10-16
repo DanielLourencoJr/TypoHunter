@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import {
   GROQ_DEFAULT_MODEL, GEMINI_DEFAULT_MODEL, defaultModel,
   groqProvider, geminiProvider, providersFromEnv, chatCompletion,
+  opencodeProvider, OPENCODE_DEFAULT_MODEL,
 } from "../lib/llm.js";
+import { sessionGenerate } from "../lib/opencode-server.js";
 
-const ENV_KEYS = ["LLM_ORDER", "GROQ_API_KEY", "GEMINI_API_KEY", "GROQ_MODEL", "GEMINI_MODEL"];
+const ENV_KEYS = ["LLM_ORDER", "GROQ_API_KEY", "GEMINI_API_KEY", "GROQ_MODEL", "GEMINI_MODEL", "OPENCODE_MODEL", "OPENCODE_URL"];
 const savedEnv = {};
 for (const k of ENV_KEYS) savedEnv[k] = process.env[k];
 
@@ -72,18 +74,19 @@ test("providersFromEnv: respects LLM_ORDER and drops keyless providers", () => {
   assert.deepEqual(providersFromEnv().map((p) => p.name), ["groq"]);
 });
 
-test("providersFromEnv: default order is gemini,groq", () => {
+test("providersFromEnv: default order is opencode,gemini,groq (opencode gated by CLI)", () => {
   delete process.env.LLM_ORDER;
   process.env.GROQ_API_KEY = "g";
   process.env.GEMINI_API_KEY = "m";
-  assert.deepEqual(providersFromEnv().map((p) => p.name), ["gemini", "groq"]);
+  assert.deepEqual(providersFromEnv({ opencodeAvailable: () => true }).map((p) => p.name), ["opencode", "gemini", "groq"]);
+  assert.deepEqual(providersFromEnv({ opencodeAvailable: () => false }).map((p) => p.name), ["gemini", "groq"]);
 });
 
 test("providersFromEnv: no keys => empty list (heuristic demo mode)", () => {
   delete process.env.LLM_ORDER;
   delete process.env.GROQ_API_KEY;
   delete process.env.GEMINI_API_KEY;
-  assert.deepEqual(providersFromEnv(), []);
+  assert.deepEqual(providersFromEnv({ opencodeAvailable: () => false }), []);
 });
 
 test("providersFromEnv: unknown provider name throws", () => {
@@ -212,4 +215,106 @@ test("defaultModel: env override, else Groq default", () => {
   assert.equal(defaultModel(), GROQ_DEFAULT_MODEL);
   process.env.GROQ_MODEL = "custom";
   assert.equal(defaultModel(), "custom");
+});
+
+// ---- OpenCode provider (local `opencode serve` transport) ----
+
+test("opencodeProvider: no key, kind=opencode, free default model", () => {
+  delete process.env.OPENCODE_MODEL;
+  delete process.env.OPENCODE_URL;
+  const p = opencodeProvider();
+  assert.equal(p.name, "opencode");
+  assert.equal(p.kind, "opencode");
+  assert.equal(p.model, OPENCODE_DEFAULT_MODEL);
+  assert.match(OPENCODE_DEFAULT_MODEL, /-free$/);
+  assert.equal(p.base, undefined);
+  assert.ok(p.key);
+});
+
+test("opencodeProvider: env + explicit model override", () => {
+  process.env.OPENCODE_MODEL = "env-model";
+  assert.equal(opencodeProvider().model, "env-model");
+  assert.equal(opencodeProvider({ model: "arg-model" }).model, "arg-model");
+});
+
+test("providersFromEnv: opencode included only when the CLI is available", () => {
+  process.env.LLM_ORDER = "opencode,groq";
+  process.env.GROQ_API_KEY = "g";
+  assert.deepEqual(providersFromEnv({ opencodeAvailable: () => false }).map((p) => p.name), ["groq"]);
+  assert.deepEqual(providersFromEnv({ opencodeAvailable: () => true }).map((p) => p.name), ["opencode", "groq"]);
+});
+
+test("chatCompletion: opencode dispatches to a throwaway session", async () => {
+  const { calls, restore } = mockFetch((rec) => {
+    if (rec.url.endsWith("/session")) return resp({ body: JSON.stringify({ id: "ses_x" }) });
+    if (rec.url.endsWith("/session/ses_x/message"))
+      return resp({ body: JSON.stringify({ info: { tokens: { input: 5, output: 3 } }, parts: [{ type: "text", text: '{"suggestions":[]}' }] }) });
+    return resp({ body: "{}" });
+  });
+  try {
+    const p = opencodeProvider({ base: "http://127.0.0.1:5198" });
+    const r = await chatCompletion(p, { system: "SYS", user: "USR" });
+    assert.equal(r.content, '{"suggestions":[]}');
+    assert.equal(r.usage.total_tokens, 8);
+    const msg = calls.find((c) => c.url.endsWith("/message"));
+    assert.deepEqual(msg.body.model, { providerID: "opencode", modelID: OPENCODE_DEFAULT_MODEL });
+    assert.equal(msg.body.system, "SYS");
+    assert.deepEqual(msg.body.parts, [{ type: "text", text: "USR" }]);
+    assert.deepEqual(msg.body.tools, {});
+    assert.ok(calls.some((c) => c.opts.method === "DELETE" && c.url.endsWith("/session/ses_x")));
+  } finally { restore(); }
+});
+
+test("sessionGenerate: model field selects providerID/modelID when prefixed", async () => {
+  const { calls, restore } = mockFetch((rec) => {
+    if (rec.url.endsWith("/session")) return resp({ body: JSON.stringify({ id: "ses_y" }) });
+    return resp({ body: JSON.stringify({ info: {}, parts: [] }) });
+  });
+  try {
+    await sessionGenerate("http://127.0.0.1:5198", "acme/fast-model", { system: "s", user: "u" });
+    const msg = calls.find((c) => c.url.endsWith("/message"));
+    assert.deepEqual(msg.body.model, { providerID: "acme", modelID: "fast-model" });
+  } finally { restore(); }
+});
+
+test("sessionGenerate: no text parts falls back to empty-suggestions JSON", async () => {
+  const { restore } = mockFetch((rec) => {
+    if (rec.url.endsWith("/session")) return resp({ body: JSON.stringify({ id: "ses_z" }) });
+    return resp({ body: JSON.stringify({ info: {}, parts: [] }) });
+  });
+  try {
+    const r = await sessionGenerate("http://127.0.0.1:5198", "m", { system: "s", user: "u" });
+    assert.deepEqual(JSON.parse(r.content), { suggestions: [] });
+    assert.equal(r.usage.total_tokens, 0);
+  } finally { restore(); }
+});
+
+test("sessionGenerate: assistant error mentioning quota => quotaExhausted", async () => {
+  const { restore } = mockFetch((rec) => {
+    if (rec.url.endsWith("/session")) return resp({ body: JSON.stringify({ id: "ses_q" }) });
+    return resp({ body: JSON.stringify({ info: { error: { data: { message: "quota exceeded: requests per day" } } }, parts: [] }) });
+  });
+  try {
+    await assert.rejects(sessionGenerate("http://127.0.0.1:5198", "m", { system: "s", user: "u" }),
+      (e) => e.quotaExhausted === true);
+  } finally { restore(); }
+});
+
+test("sessionGenerate: 5xx on prompt => transient", async () => {
+  const { restore } = mockFetch((rec) => {
+    if (rec.url.endsWith("/session")) return resp({ body: JSON.stringify({ id: "ses_t" }) });
+    return resp({ ok: false, status: 503, body: "overloaded" });
+  });
+  try {
+    await assert.rejects(sessionGenerate("http://127.0.0.1:5198", "m", { system: "s", user: "u" }),
+      (e) => e.transient === true && !e.quotaExhausted);
+  } finally { restore(); }
+});
+
+test("sessionGenerate: network failure => transient", async () => {
+  const { restore } = mockFetch(() => { throw new Error("ECONNRESET"); });
+  try {
+    await assert.rejects(sessionGenerate("http://127.0.0.1:5198", "m", { system: "s", user: "u" }),
+      (e) => e.transient === true && e.retryInSec === 3 && /network error/.test(e.message));
+  } finally { restore(); }
 });

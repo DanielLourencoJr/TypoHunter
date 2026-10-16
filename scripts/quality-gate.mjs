@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Frugal quality gate: Groq vs Gemini on a HAND-PICKED paragraph set —
-// voice traps (must stay silent), a real typo (must catch), ordinary prose,
-// plus the clean control (must return []). ~16 calls total, ~15k tokens
-// split across both providers: safe to run on a work day.
+// Frugal quality gate: Groq vs Gemini (vs a local OpenCode free model, when
+// the CLI is available) on a HAND-PICKED paragraph set — voice traps (must
+// stay silent), a real typo (must catch), ordinary prose, plus the clean
+// control (must return []). ~14-21 calls total: safe to run on a work day.
 //
 // Usage: node scripts/quality-gate.mjs [--pace 1500] [--out /tmp/gate.json]
 
@@ -13,7 +13,8 @@ import { loadEnvFile } from "../../SubstackCLI/lib/auth.js";
 import {
   maskOpaque, splitParagraphs, proofreadText, promptVersion,
 } from "../lib/proofread.js";
-import { groqProvider, geminiProvider } from "../lib/llm.js";
+import { groqProvider, geminiProvider, opencodeProvider } from "../lib/llm.js";
+import { opencodeAvailable } from "../lib/opencode-server.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
@@ -42,12 +43,16 @@ const CLEAN_CONTROL = "O sol nasceu cedo naquela manhã de terça-feira. " +
 
 async function main() {
   const pace = Number(opt("--pace", "1500")) || 0;
+  const ver = promptVersion(null);
+
+  const arms = [];
   const groq = groqProvider();
   const gemini = geminiProvider();
-  if (!groq.key) throw new Error("GROQ_API_KEY missing");
-  if (!gemini.key) throw new Error("GEMINI_API_KEY missing");
-  const ver = promptVersion(null);
-  console.log(`groq=${groq.model} gemini=${gemini.model}`);
+  if (groq.key) arms.push(["groq", groq]);
+  if (gemini.key) arms.push(["gemini", gemini]);
+  if (opencodeAvailable()) arms.push(["opencode", opencodeProvider()]);
+  if (!arms.length) throw new Error("no providers configured (keys or opencode CLI missing)");
+  console.log(arms.map(([n, p]) => `${n}=${p.model}`).join(" "));
 
   const rows = [];
   for (const [file, anchor, label] of CASES) {
@@ -59,24 +64,30 @@ async function main() {
   }
   rows.push({ label: "CLEAN CONTROL (must be [])", para: CLEAN_CONTROL });
 
-  const res = { startedAt: new Date().toISOString(), groq: groq.model, gemini: gemini.model, tokens: { groq: 0, gemini: 0 }, rows: [] };
+  const res = {
+    startedAt: new Date().toISOString(),
+    models: Object.fromEntries(arms.map(([n, p]) => [n, p.model])),
+    tokens: Object.fromEntries(arms.map(([n]) => [n, 0])),
+    rows: [],
+  };
   for (const row of rows) {
-    const arms = {};
-    for (const [name, p] of [["groq", groq], ["gemini", gemini]]) {
+    const got = {};
+    for (const [name, p] of arms) {
       let usage = null;
       const r = await proofreadText(row.para, {
         provider: p, system: ver.system, template: ver.template,
         onUsage: (u) => { usage = u; },
       });
-      arms[name] = r.suggestions;
+      got[name] = r.suggestions;
       res.tokens[name] += usage?.total || 0;
       await sleep(pace);
     }
-    res.rows.push({ label: row.label, para: row.para.slice(0, 120), groq: arms.groq, gemini: arms.gemini });
+    res.rows.push({ label: row.label, para: row.para.slice(0, 120), ...got });
     const fmt = (ss) => ss.length ? ss.map((s) => `“${s.original}”→“${s.replacement}”`).join(" | ") : "[]";
-    console.log(`\n### ${row.label}\n  groq:   ${fmt(arms.groq)}\n  gemini: ${fmt(arms.gemini)}`);
+    console.log(`\n### ${row.label}`);
+    for (const [name] of arms) console.log(`  ${name.padEnd(8)} ${fmt(got[name])}`);
   }
-  console.log(`\ntokens: groq=${res.tokens.groq} gemini=${res.tokens.gemini}`);
+  console.log(`\ntokens: ${arms.map(([n]) => `${n}=${res.tokens[n]}`).join(" ")}`);
   const out = opt("--out", "/tmp/gate.json");
   fs.writeFileSync(out, JSON.stringify(res, null, 2), "utf8");
   console.log(`wrote ${out}`);

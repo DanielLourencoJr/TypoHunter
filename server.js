@@ -8,6 +8,7 @@ import { draftToMarkdown, tiptapToMarkdown } from "../SubstackCLI/lib/convert.js
 import { parseFrontmatter, stringifyFrontmatter } from "../SubstackCLI/lib/frontmatter.js";
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
 import { providersFromEnv } from "./lib/llm.js";
+import { stopOpencodeServer } from "./lib/opencode-server.js";
 import {
   splitParagraphs, paraHash, promptVersion,
   partitionParagraphs, groupNewUnits, uniqueUnits, proofreadText,
@@ -930,6 +931,12 @@ function isDirectRun() {
 }
 if (isDirectRun()) {
   server.listen(PORT, () => console.log(`typohunter on http://localhost:${PORT} (PUB=${process.env.PUB || "?"})`));
+  // The OpenCode provider spawns a headless `opencode serve`; don't leave it
+  // orphaned when nodemon restarts or the operator stops the server.
+  const stop = () => { stopOpencodeServer(); process.exit(0); };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+  process.on("exit", () => stopOpencodeServer());
 }
 
 export {

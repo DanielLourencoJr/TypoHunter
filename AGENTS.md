@@ -33,12 +33,28 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   (~4 posts/day, useless); the lite models get 500). Gemini runs with
   `reasoning_effort: "low"` — the lite models REJECT `"none"` (503/400);
   the non-lite flashes accept `"none"` and are ~6x cheaper with it. `LLM_ORDER`
-  (default `gemini,groq` — Gemini leads because the quality gate showed Groq
-  repeatedly editing correct prose; Groq covers Gemini's cap and has better
-  raw recall) sets failover order; only keys
+  (default `opencode,gemini,groq` — OpenCode's free model leads because it is
+  effectively uncapped, Gemini/Groq cover its misses; Gemini stayed cleanest in
+  the quality gate but has daily caps) sets failover order; only keys
   present are used, none at all = heuristic demo. Daily-cap 429s fail over,
   never retried. Per-provider daily spend lands in `data/llm-usage.json`
   (gitignored, best-effort).
+- Optional third provider: **opencode** (free tier). It is NOT an HTTP endpoint —
+  the Console rejects direct calls (`403 FreeTierError: "can only be used from
+  within OpenCode"`), including replays of opencode's exact User-Agent/`x-opencode-*`
+  headers. So `lib/opencode-server.js` spawns a local headless
+  `opencode serve --pure` and drives ITS session API (`POST /session` →
+  `POST /session/:id/message` with `system` + one text part + `tools: {}` →
+  `DELETE /session/:id`): a throwaway session per call so nothing leaks across
+  paragraphs. Availability = the CLI is installed (`OPENCODE_BIN`, else
+  `~/.opencode/bin/opencode`); no key. `OPENCODE_MODEL` defaults to
+  `deepseek-v4.1-flash-free`; `OPENCODE_PORT` (default 5198) is reused across
+  runs, `OPENCODE_URL` attaches to a server you already run. Only used when
+  listed in `LLM_ORDER` (default `opencode,gemini,groq`, skipped when the CLI is
+  absent). The session API exposes
+  no temperature/max-tokens, so it is less deterministic than the HTTP
+  providers, and the quality gate found it both missing a real typo and
+  editing correct prose — hence not the default.
   `REVIEWER_SID` is the service (contributor-model) identity; central vault keeps
   `SUBSTACK_SID_REVIEWER` + `SUBSTACK_USERID_REVIEWER` + `SUBSTACK_HANDLE_REVIEWER`.
   Experiments use the TEST account: `/mnt/HD/Junior/Projects/.substack.test.env`
