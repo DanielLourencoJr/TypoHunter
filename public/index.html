@@ -1286,6 +1286,28 @@ async function loadLibrary() {  clearErrs(); setStatus('carregando textos…', '
     setStatus('pronto');
   } catch (e) { showErr(e.message, 'err-lib'); }
 }
+function hasMorePostPages() {
+  if (!S.posts) return false;
+  const totals = S.posts.totals || {};
+  if (totals.drafts != null && totals.published != null) {
+    return S.posts.drafts.length < totals.drafts || S.posts.published.length < totals.published;
+  }
+  const nextPageEnd = S.postsOffset + PAGE;
+  return S.posts.drafts.length >= nextPageEnd || S.posts.published.length >= nextPageEnd;
+}
+async function loadNextPostPage() {
+  const nextOffset = S.postsOffset + PAGE;
+  const r = await apiFetch(`/api/posts?limit=${PAGE}&offset=${nextOffset}`, { headers: H() });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  S.postsOffset = nextOffset;
+  S.posts.drafts.push(...(j.drafts || []));
+  S.posts.published.push(...(j.published || []));
+  S.posts.totals = j.totals || S.posts.totals;
+}
+async function loadAllPostsForSearch() {
+  while ($('filter').value.trim() && hasMorePostPages()) await loadNextPostPage();
+}
 function renderLibrary() {
   const j = S.posts;
   const adm = !!S.admin;
@@ -1325,18 +1347,27 @@ $('more').onclick = async () => {
   const btn = $('more');
   btn.disabled = true;
   try {
-    S.postsOffset += PAGE;
-    const r = await apiFetch(`/api/posts?limit=${PAGE}&offset=${S.postsOffset}`, { headers: H() });
-    const j = await r.json();
-    if (j.error) throw new Error(j.error);
-    S.posts.drafts.push(...(j.drafts || []));
-    S.posts.published.push(...(j.published || []));
-    S.posts.totals = j.totals || S.posts.totals;
+    await loadNextPostPage();
     renderLibrary();
-  } catch (e) { showErr(e.message, 'err-lib'); S.postsOffset -= PAGE; }
+  } catch (e) { showErr(e.message, 'err-lib'); }
   finally { btn.disabled = false; }
 };
-$('filter').oninput = () => { if (S.posts) renderLibrary(); };
+let searchLoadPromise = null;
+let searchDebounceTimer = null;
+$('filter').oninput = () => {
+  if (!S.posts) return;
+  clearTimeout(searchDebounceTimer);
+  renderLibrary();
+  if (!$('filter').value.trim() || S.admin) return;
+  $('lib-count').textContent = 'Buscando em todos os artigos…';
+  searchDebounceTimer = setTimeout(async () => {
+    if (!searchLoadPromise) searchLoadPromise = loadAllPostsForSearch().finally(() => { searchLoadPromise = null; });
+    $('more').disabled = true;
+    try { await searchLoadPromise; }
+    catch (e) { showErr(e.message, 'err-lib'); }
+    finally { $('more').disabled = false; renderLibrary(); }
+  }, 250);
+};
 
 /* ---------- histórico + análise em segundo plano ---------- */
 function originOf(v) {

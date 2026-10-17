@@ -34,6 +34,7 @@ function makeEl(id) {
 
 const els = new Map();
 const store = { getItem: () => null, setItem() {}, removeItem() {} };
+let fetchImpl = async () => { throw new Error("unexpected fetch in UI test"); };
 const sandbox = {
   console,
   document: {
@@ -47,6 +48,7 @@ const sandbox = {
   location: { hash: "" },
   localStorage: store,
   sessionStorage: store,
+  fetch: (...args) => fetchImpl(...args),
   atob: globalThis.atob,
   btoa: globalThis.btoa,
   TextDecoder,
@@ -194,6 +196,29 @@ T("libCard: published posts use the same compact card layout", () => {
   assert.match(card, /post-card-stats/);
   assert.match(card, /♥ 3/);
   assert.match(card, /💬 2/);
+});
+
+T("search pagination loads posts outside the first rendered page", async () => {
+  const filter = sandbox.document.getElementById("filter");
+  filter.value = "Cat";
+  sandbox.testPosts = {
+    drafts: [],
+    published: Array.from({ length: 20 }, (_, index) => ({ id: String(index), title: `Article ${index}`, published: true })),
+    totals: { drafts: 0, published: 21 },
+  };
+  vm.runInContext("S.postsOffset = 0; S.posts = testPosts", sandbox);
+  fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({
+    drafts: [], published: [{ id: "21", title: "Cat article", published: true }], totals: { drafts: 0, published: 21 },
+  }) });
+  try {
+    await sandbox.loadAllPostsForSearch();
+    assert.equal(vm.runInContext("S.postsOffset", sandbox), 20);
+    assert.equal(sandbox.testPosts.published.length, 21);
+    assert.equal(sandbox.testPosts.published.at(-1).title, "Cat article");
+  } finally {
+    fetchImpl = async () => { throw new Error("unexpected fetch in UI test"); };
+    filter.value = "";
+  }
 });
 
 T("admCard: synthetic adm: id and mapped stats", () => {
