@@ -181,8 +181,10 @@ T("fmtStat: em-dash for null", () => {
 T("libCard: data-id, escaped title, audience for drafts", () => {
   const card = sandbox.libCard({ id: "12", title: "T<b>", published: false, audience: "everyone", date: "2024-01-02" });
   assert.match(card, /data-id="12"/);
+  assert.match(card, /class="libcard draft-card"/, "drafts use the compact publication-card layout");
+  assert.match(card, /draft-card-cover[\s\S]*?T&lt;b&gt;/, "draft card shows a fallback cover and escaped title");
   assert.match(card, /T&lt;b&gt;/);
-  assert.match(card, /everyone/);
+  assert.match(card, /draft-card-audience">everyone/);
 });
 
 T("admCard: synthetic adm: id and mapped stats", () => {
