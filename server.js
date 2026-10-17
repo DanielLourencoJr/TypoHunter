@@ -903,22 +903,24 @@ const server = http.createServer(async (req, res) => {  try {
       if (!hosts.length || hosts.length > 20 || hosts.some((host) => !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.substack\.com$/i.test(host))) {
         return send(res, 400, { error: "invalid publication list" });
       }
-      let drafts = null;
-      try {
-        const result = await listDrafts({ sid: sidFrom(req), publicationUrl: req.authSession.pub, limit: 1, offset: 0 });
-        drafts = result.total ?? null;
-      } catch { /* private drafts are unavailable for the verified publication */ }
+      const drafts = {};
+      if (hosts.includes(req.authSession.pub)) {
+        try {
+          const result = await listDrafts({ sid: sidFrom(req), publicationUrl: req.authSession.pub, limit: 1, offset: 0 });
+          drafts[req.authSession.pub] = result.total ?? null;
+        } catch { drafts[req.authSession.pub] = null; }
+      }
       let published = 0;
       try {
         for (const host of hosts) {
           let offset = 0;
           let pages = 0;
           while (pages++ < 100) {
-            const response = await fetch(`https://${host}/api/v1/archive?sort=new&limit=100&search=&offset=${offset}`);
+            const response = await fetch(`https://${host}/api/v1/archive?sort=new&limit=50&search=&offset=${offset}`);
             const items = await response.json().catch(() => null);
             if (!response.ok || !Array.isArray(items)) throw new Error("archive unavailable");
             published += items.filter((item) => item.slug).length;
-            if (items.length < 100) break;
+            if (items.length < 50) break;
             offset += items.length;
           }
         }

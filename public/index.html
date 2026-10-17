@@ -1159,24 +1159,29 @@ async function showDash() {
   }
   const profilePublications = ref.kind === 'profile' && Array.isArray(ref.publications) ? ref.publications : [];
   const hasProfilePublications = profilePublications.length > 0;
+  let profileDraftCounts = {};
+  let renderProfileCards = null;
   $('dash-profile-picker').style.display = hasProfilePublications ? '' : 'none';
   $('dash-heading').innerHTML = hasProfilePublications ? '<span class="step">✓</span>Suas publicações' : '<span class="step">✓</span>Sua publicação';
   if (hasProfilePublications) {
-    $('dash-publications').innerHTML = profilePublications.map((pub) => {
+    renderProfileCards = () => profilePublications.map((pub) => {
       const verified = pub.host === S.pub;
       const name = pub.name || pub.host;
       const initial = esc(Array.from(name)[0] || '•').toUpperCase();
       const logo = pub.image ? `<img src="${esc(pub.image)}" alt="" loading="lazy" />` : '';
       const status = verified ? 'Verificado' : 'A verificar';
-      return `<button class="publication-card" type="button" data-pub="${esc(pub.host)}" aria-label="${esc(name)} — ${status}"><span class="publication-card-logo" aria-hidden="true"><span>${initial}</span>${logo}</span><span class="publication-card-copy"><span class="publication-card-name">${esc(name)}</span><span class="publication-card-host">${esc(pub.host)}</span></span><span class="publication-status ${verified ? 'verified' : 'pending'}">${status}</span></button>`;
+      const draftCount = profileDraftCounts[pub.host];
+      const draftLabel = verified && Number.isFinite(draftCount) ? `Rascunhos: ${draftCount}` : 'Rascunhos: Desconhecido';
+      return `<button class="publication-card" type="button" data-pub="${esc(pub.host)}" aria-label="${esc(name)} — ${status} — ${draftLabel}"><span class="publication-card-logo" aria-hidden="true"><span>${initial}</span>${logo}</span><span class="publication-card-copy"><span class="publication-card-name">${esc(name)}</span><span class="publication-card-host">${esc(pub.host)}</span><span class="publication-card-host">${draftLabel}</span></span><span class="publication-status ${verified ? 'verified' : 'pending'}">${status}</span></button>`;
     }).join('');
+    $('dash-publications').innerHTML = renderProfileCards();
     $('dash-go').style.display = 'none';
   } else {
     $('dash-publications').innerHTML = '';
     $('dash-go').style.display = '';
     $('dash-go').textContent = 'Revisar texto';
   }
-  let counts = '';
+  let publishedCount = null;
   try {
     let totalsUrl = '/api/posts?limit=1';
     if (hasProfilePublications) {
@@ -1188,12 +1193,18 @@ async function showDash() {
     const j = await r.json();
     const t = hasProfilePublications ? j : j.totals;
     if (!j.error && t) {
-      counts = `${t.drafts ?? '?'} rascunhos · ${t.published ?? '?'} publicados`;
+      if (hasProfilePublications) {
+        profileDraftCounts = t.drafts && typeof t.drafts === 'object' ? t.drafts : {};
+        publishedCount = t.published;
+        $('dash-publications').innerHTML = renderProfileCards();
+      } else {
+        publishedCount = t.published;
+      }
     }
   } catch { /* segue sem contagem */ }
   $('dash-info').innerHTML =
     `<p style="font-size:18px;margin:0 0 4px"><strong>${esc(ref.name || S.pub)}</strong></p>` +
-    (counts ? `<p class="hint" style="margin:0 0 4px">${counts}</p>` : '') +
+    (hasProfilePublications ? `<p class="hint" style="margin:0 0 4px">Publicados: ${publishedCount ?? 'Desconhecido'}</p>` : (publishedCount !== null ? `<p class="hint" style="margin:0 0 4px">${publishedCount} publicados</p>` : '')) +
     (hasProfilePublications ? '<p class="hint" style="font-size:12px;margin:0">A contagem de rascunhos considera apenas publicações verificadas.</p>' : '');
 }
 async function openProfilePublication(host) {

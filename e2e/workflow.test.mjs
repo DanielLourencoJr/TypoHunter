@@ -233,7 +233,7 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   assert.equal(activeSession.landing, "drafts", "landing choice survives page reload");
   const dashboardTotals = await realFetch(`${baseUrl}/api/profile/totals?host=e2e-example.substack.com&host=e2e-second.substack.com`, { headers: { Cookie: sessionCookie } });
   assert.equal(dashboardTotals.status, 200);
-  assert.deepEqual(await dashboardTotals.json(), { drafts: 1, published: 3 }, "dashboard counts verified drafts and public posts across profile publications");
+  assert.deepEqual(await dashboardTotals.json(), { drafts: { "e2e-example.substack.com": 1 }, published: 3 }, "dashboard counts verified drafts and public posts across profile publications");
 
   challengeDeleted = false;
   const expiringResponse = await challengeRequest();

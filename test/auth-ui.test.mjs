@@ -87,7 +87,7 @@ test("login gate presents setup and verification as sequential steps", async () 
         if (!verificationSucceeds) return { ok: false, status: 401, json: async () => ({ error: "invalid or expired code" }) };
         return { ok: true, status: 200, json: async () => ({ ok: true, pub: currentPub, landing: currentLanding, expiresAt: Date.now() + 60_000 }) };
       }
-      if (url.pathname === "/api/profile/totals") return { ok: true, status: 200, json: async () => ({ drafts: 2, published: 47 }) };
+      if (url.pathname === "/api/profile/totals") return { ok: true, status: 200, json: async () => ({ drafts: { "writer.substack.com": 2 }, published: 47 }) };
       if (url.pathname === "/api/posts") return { ok: true, status: 200, json: async () => ({ drafts: [], published: [], totals: { drafts: 2, published: 4 } }) };
       throw new Error(`unexpected request: ${url.pathname}`);
     },
@@ -185,7 +185,9 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.match(get("dash-publications").innerHTML, /writer\.substack\.com[\s\S]*?Verificado/);
   assert.match(get("dash-publications").innerHTML, /second\.substack\.com[\s\S]*?A verificar/);
   assert.equal(get("dash-go").style.display, "none", "profile selection uses publication cards instead of a shared button");
-  assert.match(get("dash-info").innerHTML, /2 rascunhos · 47 publicados/, "dashboard totals cover the profile publications");
+  assert.match(get("dash-info").innerHTML, /Publicados: 47/, "main dashboard card shows profile-wide published totals");
+  assert.match(get("dash-publications").innerHTML, /Rascunhos: 2/, "verified publication card shows its own draft count");
+  assert.match(get("dash-publications").innerHTML, /Rascunhos: Desconhecido/, "unverified publication card hides its draft count");
   assert.match(get("dash-info").innerHTML, /rascunhos considera apenas publicações verificadas/);
   assert.doesNotMatch(get("dash-info").innerHTML, /<a\b|Acesso confirmado/, "the profile summary has no single-publication link or global access claim");
   const totalsCall = calls.filter((call) => call.path === "/api/profile/totals").at(-1);
