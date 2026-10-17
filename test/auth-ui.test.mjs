@@ -73,7 +73,7 @@ test("login gate presents setup and verification as sequential steps", async () 
       if (url.pathname === "/api/config") return { ok: true, status: 200, json: async () => ({ reviewerEmail: "" }) };
       if (url.pathname === "/api/auth/session") return { ok: false, status: 401, json: async () => ({}) };
       if (url.pathname === "/api/resolve") {
-        if (resolvedInput.includes("@writer")) return { ok: true, status: 200, json: async () => ({ kind: "profile", handle: "writer", name: "Writer Profile", host: "", publications: [{ host: "writer.substack.com", name: "Writer" }, { host: "second.substack.com", name: "Second" }] }) };
+        if (resolvedInput.includes("@writer")) return { ok: true, status: 200, json: async () => ({ kind: "profile", handle: "writer", name: "Writer Profile", host: "", publications: [{ host: "writer.substack.com", name: "Writer", image: "https://cdn.example.test/writer.png" }, { host: "second.substack.com", name: "Second", image: "https://cdn.example.test/second.png" }] }) };
         return { ok: true, status: 200, json: async () => ({ kind: "publication", host: "writer.substack.com", name: "Writer" }) };
       }
       if (url.pathname === "/api/auth/challenge") {
@@ -176,18 +176,23 @@ test("login gate presents setup and verification as sequential steps", async () 
   await get("auth-verify").onclick();
   assert.equal(get("v-dash").classList.contains("on"), true, "profile login opens the publication selection dashboard");
   assert.equal(get("dash-profile-picker").style.display, "");
-  assert.match(get("dash-pub-select").innerHTML, /second\.substack\.com/);
-
-  get("dash-pub-select").value = "second.substack.com";
-  get("dash-pub-select").onchange();
-  await get("dash-go").onclick();
+  assert.match(get("dash-publications").innerHTML, /second\.substack\.com/);
+  assert.match(get("dash-publications").innerHTML, /cdn\.example\.test\/writer\.png/);
+  assert.match(get("dash-publications").innerHTML, /Verificado/);
+  assert.match(get("dash-publications").innerHTML, /A verificar/);
+  assert.match(get("dash-publications").innerHTML, /writer\.substack\.com[\s\S]*?Verificado/);
+  assert.match(get("dash-publications").innerHTML, /second\.substack\.com[\s\S]*?A verificar/);
+  assert.equal(get("dash-go").style.display, "none", "profile selection uses publication cards instead of a shared button");
+  await vm.runInContext("openProfilePublication('second.substack.com')", context);
   assert.equal(get("welcome").classList.contains("on"), true, "another publication requires verification before opening");
   assert.equal(get("welcome-auth").style.display, "", "switching publication opens authentication directly");
   await get("auth-next").onclick();
   assert.deepEqual(JSON.parse(calls.filter((call) => call.path === "/api/auth/challenge").at(-1).init.body), { pub: "second.substack.com", landing: "dashboard" });
   await get("auth-verify").onclick();
   assert.equal(vm.runInContext("S.auth.pub", context), "second.substack.com");
-  assert.equal(get("v-dash").classList.contains("on"), true, "second verified publication returns to the selector dashboard");
-  await get("dash-go").onclick();
+  assert.equal(get("v-dash").classList.contains("on"), true, "second verified publication returns to the card dashboard");
+  assert.match(get("dash-publications").innerHTML, /second\.substack\.com[\s\S]*?Verificado/);
+  assert.match(get("dash-publications").innerHTML, /writer\.substack\.com[\s\S]*?A verificar/);
+  await vm.runInContext("openProfilePublication('second.substack.com')", context);
   assert.equal(get("v-library").classList.contains("on"), true, "selected verified publication opens its drafts menu");
 });

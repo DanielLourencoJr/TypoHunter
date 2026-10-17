@@ -100,6 +100,18 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 .auth-form-row input{flex:1;min-width:180px}
 .auth-footer{display:flex;align-items:center;gap:9px;border-top:1px solid var(--line);margin-top:18px;padding-top:14px}
 .auth-footer .spacer{flex:1}
+.publication-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px;margin-top:18px}
+.publication-card{display:flex;align-items:center;gap:14px;width:100%;min-width:0;padding:14px;border:1px solid var(--cardbd);border-radius:14px;background:var(--card);color:var(--ink);text-align:left;cursor:pointer;box-shadow:var(--cardshadow);transition:transform .15s,border-color .15s,box-shadow .15s}
+.publication-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.publication-card:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.publication-card-logo{position:relative;display:grid;place-items:center;flex:none;width:60px;height:60px;overflow:hidden;border-radius:12px;background:var(--accent-bg);color:var(--accent);font:700 22px var(--font-ui)}
+.publication-card-logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.publication-card-copy{display:flex;flex:1;flex-direction:column;gap:4px;min-width:0}
+.publication-card-name{font:650 15px var(--font-ui);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.publication-card-host{font:12px var(--font-ui);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.publication-status{flex:none;border-radius:999px;padding:5px 9px;font:650 11px var(--font-ui);white-space:nowrap}
+.publication-status.verified{background:var(--green-bg);color:var(--green)}
+.publication-status.pending{background:var(--accent-bg);color:var(--accent)}
 /* tutorial mock window */
 .mock{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:10px 0;font-family:var(--font-ui);font-size:13px}
 .mockbar{background:var(--soft);padding:6px 12px;color:var(--muted);border-bottom:1px solid var(--line)}
@@ -407,9 +419,7 @@ a { color: var(--accent); }
       <h2 id="dash-heading"><span class="step">✓</span>Sua publicação</h2>
       <div id="dash-info"></div>
       <div id="dash-profile-picker" style="display:none;margin-top:12px">
-        <label class="auth-label" for="dash-pub-select">Selecione uma publicação</label>
-        <select id="dash-pub-select" style="width:100%"></select>
-        <p class="hint">Para abrir outra publicação, confirme o acesso com o código enviado a ela.</p>
+        <div id="dash-publications" class="publication-grid" aria-label="Suas publicações"></div>
       </div>
       <div class="row" style="margin-top:12px">
         <button id="dash-go" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white text-base px-7 py-3">Revisar texto</button>
@@ -1133,15 +1143,37 @@ $('tut-check').onclick = async () => {
 /* ---------- dashboard + biblioteca ---------- */
 async function showDash() {
   showView('dash');
-  const ref = S.ref || {};
+  let ref = S.ref || {};
+  if (ref.kind === 'profile' && ref.handle && ref.publications?.some((pub) => !pub.image)) {
+    try {
+      const response = await apiFetch('/api/resolve?input=' + encodeURIComponent('@' + ref.handle));
+      const latest = await response.json();
+      if (response.ok && latest.kind === 'profile' && Array.isArray(latest.publications)) {
+        const byHost = new Map(latest.publications.map((pub) => [pub.host, pub]));
+        ref = { ...ref, publications: ref.publications.map((pub) => ({ ...pub, ...byHost.get(pub.host) })) };
+        S.ref = ref;
+        S.profileRef = ref;
+        try { localStorage.setItem('th_ref', JSON.stringify(ref)); } catch {}
+      }
+    } catch { /* render publication initials if profile images are unavailable */ }
+  }
   const profilePublications = ref.kind === 'profile' && Array.isArray(ref.publications) ? ref.publications : [];
   const hasProfilePublications = profilePublications.length > 0;
   $('dash-profile-picker').style.display = hasProfilePublications ? '' : 'none';
   $('dash-heading').innerHTML = hasProfilePublications ? '<span class="step">✓</span>Suas publicações' : '<span class="step">✓</span>Sua publicação';
   if (hasProfilePublications) {
-    setPublicationOptions($('dash-pub-select'), profilePublications, S.pub);
-    $('dash-go').textContent = $('dash-pub-select').value === S.pub ? 'Abrir rascunhos' : 'Verificar acesso e abrir';
+    $('dash-publications').innerHTML = profilePublications.map((pub) => {
+      const verified = pub.host === S.pub;
+      const name = pub.name || pub.host;
+      const initial = esc(Array.from(name)[0] || '•').toUpperCase();
+      const logo = pub.image ? `<img src="${esc(pub.image)}" alt="" loading="lazy" />` : '';
+      const status = verified ? 'Verificado' : 'A verificar';
+      return `<button class="publication-card" type="button" data-pub="${esc(pub.host)}" aria-label="${esc(name)} — ${status}"><span class="publication-card-logo" aria-hidden="true"><span>${initial}</span>${logo}</span><span class="publication-card-copy"><span class="publication-card-name">${esc(name)}</span><span class="publication-card-host">${esc(pub.host)}</span></span><span class="publication-status ${verified ? 'verified' : 'pending'}">${status}</span></button>`;
+    }).join('');
+    $('dash-go').style.display = 'none';
   } else {
+    $('dash-publications').innerHTML = '';
+    $('dash-go').style.display = '';
     $('dash-go').textContent = 'Revisar texto';
   }
   let counts = '';
@@ -1159,18 +1191,29 @@ async function showDash() {
     `<p class="hint" style="margin:0 0 8px">${S.pub ? `<a href="https://${esc(S.pub)}" target="_blank" rel="noopener">${esc(S.pub)}</a>` : esc(ref.handle || '')}${counts ? ' · ' + counts : ''}</p>` +
     `<p class="hint" style="margin:0">Acesso confirmado ✓ (${who})</p>`;
 }
-$('dash-pub-select').onchange = () => {
-  $('dash-go').textContent = $('dash-pub-select').value === S.pub ? 'Abrir rascunhos' : 'Verificar acesso e abrir';
-};
-$('dash-go').onclick = () => {
-  const selected = $('dash-profile-picker').style.display === 'none' ? S.pub : $('dash-pub-select').value;
-  if (!selected || selected === S.pub) { showView('library'); loadLibrary(); return; }
-  S.pendingPub = selected;
+async function openProfilePublication(host) {
+  const pub = S.ref?.kind === 'profile' ? S.ref.publications?.find((item) => item.host === host) : null;
+  if (!pub) return;
+  if (pub.host === S.pub) {
+    showView('library');
+    await loadLibrary();
+    return;
+  }
+  S.pendingPub = pub.host;
   S.returningAuth = S.auth;
-  $('auth-ref').value = selected;
+  $('auth-ref').value = pub.host;
   $('auth-profile-picker').style.display = 'none';
   $('auth-setup-status').textContent = 'Adicione a conta revisora a esta publicação e depois solicite o código.';
   showLoginGate();
+}
+$('dash-publications').onclick = (event) => {
+  const card = event.target.closest?.('[data-pub]');
+  if (card) openProfilePublication(card.dataset.pub);
+};
+$('dash-go').onclick = () => {
+  if (S.ref?.kind === 'profile') return;
+  showView('library');
+  loadLibrary();
 };
 function fmtDate(d) { try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return ''; } }
 function fmtStat(v) { return v == null ? '—' : String(v); }

@@ -115,8 +115,8 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
       return response({
         id: 88, handle: "e2e-writer", name: "E2E Writer",
         publications: [
-          { name: "First publication", subdomain: "e2e-example" },
-          { name: "Second publication", subdomain: "e2e-second" },
+          { name: "First publication", subdomain: "e2e-example", logo_url: "https://cdn.example.test/first.png" },
+          { publication: { name: "Second publication", subdomain: "e2e-second", logoUrl: "https://cdn.example.test/second.png" } },
         ],
         subscriptions: [{ name: "Unrelated subscription", subdomain: "unrelated" }],
       });
@@ -180,6 +180,8 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   const profile = await profileResponse.json();
   assert.equal(profile.kind, "profile");
   assert.deepEqual(profile.publications.map((pub) => pub.host), ["e2e-example.substack.com", "e2e-second.substack.com"]);
+  assert.equal(profile.publications[0].image, "https://cdn.example.test/first.png", "public publication logos reach the dashboard cards");
+  assert.equal(profile.publications[1].image, "https://cdn.example.test/second.png", "nested publication logos are retained too");
   assert.equal(profile.publications.some((pub) => pub.host === "unrelated.substack.com"), false, "the profile selector excludes publications the writer only subscribes to");
   const challengeRequest = (cookie = "") => realFetch(`${baseUrl}/api/auth/challenge`, {
     method: "POST", headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },

@@ -311,8 +311,20 @@ async function profileRef(handle) {
     const pub = item?.publication || item;
     const subdomain = String(pub?.subdomain || pub?.handle || "").toLowerCase();
     if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)) return null;
+    const imageCandidates = [pub, item].flatMap((source) => [
+      source?.logo_url, source?.logoUrl, source?.logo?.url,
+      source?.photo_url, source?.photoUrl, source?.image_url, source?.imageUrl,
+    ]);
+    let image = "";
+    for (const candidate of imageCandidates) {
+      if (typeof candidate !== "string" || !candidate.trim()) continue;
+      try {
+        const parsed = new URL(candidate, "https://substack.com");
+        if (parsed.protocol === "https:") { image = parsed.href; break; }
+      } catch { /* try the next public image field */ }
+    }
     return [`${subdomain}.substack.com`, {
-      host: `${subdomain}.substack.com`, name: String(pub.name || subdomain),
+      host: `${subdomain}.substack.com`, name: String(pub.name || subdomain), image,
     }];
   }).filter(Boolean))].map(([, pub]) => pub);
   return {
