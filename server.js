@@ -275,23 +275,50 @@ async function resolveSubstackRef(input) {
   if (!s) throw new Error("empty");
   // profile URL form: substack.com/@handle[/...]
   let m = /^(?:www\.)?substack\.com\/@([A-Za-z0-9_-]+)/.exec(s);
-  if (m) return { kind: "profile", handle: m[1].toLowerCase(), host: "", name: "@" + m[1] };
+  if (m) return profileRef(m[1]);
   if (s.startsWith("@")) {
     const handle = s.slice(1).toLowerCase();
     if (!/^[a-z0-9_-]+$/i.test(handle)) throw new Error("invalid handle");
-    // a handle may own a same-name publication — prefer it when it exists
-    try {
-      return await publicationRef(`${handle}.substack.com`);
-    } catch {
-      const r = await fetch(`https://substack.com/@${handle}`, { redirect: "manual" });
-      if (r.status === 200) return { kind: "profile", handle, host: "", name: "@" + handle };
-      throw new Error("profile not found");
-    }
+    return profileRef(handle);
   }
   // otherwise a publication host (with or without domain part)
   const host = s.includes(".") ? s : `${s}.substack.com`;
   if (!/^[a-z0-9.-]+$/i.test(host)) throw new Error("invalid Substack link");
   return publicationRef(host);
+}
+
+async function profileRef(handle) {
+  const normalized = String(handle || "").toLowerCase();
+  if (!/^[a-z0-9_-]+$/.test(normalized)) throw new Error("invalid handle");
+  const response = await fetch(`https://substack.com/api/v1/user/${encodeURIComponent(normalized)}/public_profile`, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      Accept: "application/json",
+    },
+  });
+  if (!response.ok) throw new Error("profile not found");
+  const profile = await response.json().catch(() => null);
+  if (!profile || (profile.handle && String(profile.handle).toLowerCase() !== normalized)) throw new Error("profile not found");
+
+  // Public profile responses may expose the publications a creator writes for.
+  // Never use `subscriptions`: those are publications the person reads.
+  const candidates = [
+    ...(Array.isArray(profile.publications) ? profile.publications : []),
+    ...(Array.isArray(profile.publicationUsers) ? profile.publicationUsers : []),
+    ...(profile.primaryPublication ? [profile.primaryPublication] : []),
+  ];
+  const publications = [...new Map(candidates.map((item) => {
+    const pub = item?.publication || item;
+    const subdomain = String(pub?.subdomain || pub?.handle || "").toLowerCase();
+    if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)) return null;
+    return [`${subdomain}.substack.com`, {
+      host: `${subdomain}.substack.com`, name: String(pub.name || subdomain),
+    }];
+  }).filter(Boolean))].map(([, pub]) => pub);
+  return {
+    kind: "profile", handle: normalized, host: "",
+    name: profile.name || `@${normalized}`, publications,
+  };
 }
 
 async function publicationRef(host) {

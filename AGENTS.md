@@ -65,6 +65,9 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   `AUTH_STATE_PATH`); hosted deployments must point this at persistent storage.
   Verification drafts expire after 15 minutes and are removed on successful
   verification or by the cleanup loop after expiry. Sessions last 12 hours.
+  Direct publication sign-in opens its drafts. Profile sign-in lists public
+  authoring publications (never subscriptions), verifies each publication
+  separately, then returns to the selection dashboard.
   Experiments use the TEST account: `/mnt/HD/Junior/Projects/.substack.test.env`
   (pub `danielloureno.substack.com`). MAIN (`danielloureno1`) is LIVE — read-only
   probes only, and never echo secret values into tool output (they land in logs).

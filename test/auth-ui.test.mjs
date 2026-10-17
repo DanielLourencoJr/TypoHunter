@@ -39,6 +39,9 @@ test("login gate allows the verification tab and keeps access results generic", 
   const elements = new Map();
   const calls = [];
   let verificationSucceeds = false;
+  let resolvedInput = "writer.substack.com";
+  let currentLanding = "drafts";
+  let currentPub = "writer.substack.com";
   const genericMessage = "If the reviewer account has access, a temporary draft contains your verification code. Check your publication’s drafts, then enter the code here.";
   const sandbox = {
     console,
@@ -49,7 +52,14 @@ test("login gate allows the verification tab and keeps access results generic", 
         return elements.get(id);
       },
       querySelector() { return null; },
-      querySelectorAll() { return []; },
+      querySelectorAll(selector) {
+        if (selector !== ".view") return [];
+        return ["profile", "tutorial", "dash", "library", "history", "review", "done", "admingate"].map((name) => {
+          const id = `v-${name}`;
+          if (!elements.has(id)) elements.set(id, element(id));
+          return elements.get(id);
+        });
+      },
       documentElement: { classList: classList(), dataset: {} },
       body: { classList: classList() },
     },
@@ -62,11 +72,19 @@ test("login gate allows the verification tab and keeps access results generic", 
       calls.push({ path: url.pathname, search: url.searchParams, init });
       if (url.pathname === "/api/config") return { ok: true, status: 200, json: async () => ({ reviewerEmail: "reviewer@example.test" }) };
       if (url.pathname === "/api/auth/session") return { ok: false, status: 401, json: async () => ({}) };
-      if (url.pathname === "/api/resolve") return { ok: true, status: 200, json: async () => ({ kind: "publication", host: "writer.substack.com", name: "Writer" }) };
-      if (url.pathname === "/api/auth/challenge") return { ok: true, status: 202, json: async () => ({ ok: true, message: genericMessage }) };
+      if (url.pathname === "/api/resolve") {
+        if (resolvedInput.includes("@writer")) return { ok: true, status: 200, json: async () => ({ kind: "profile", handle: "writer", name: "Writer Profile", host: "", publications: [{ host: "writer.substack.com", name: "Writer" }, { host: "second.substack.com", name: "Second" }] }) };
+        return { ok: true, status: 200, json: async () => ({ kind: "publication", host: "writer.substack.com", name: "Writer" }) };
+      }
+      if (url.pathname === "/api/auth/challenge") {
+        const challenge = JSON.parse(init.body);
+        currentLanding = challenge.landing;
+        currentPub = challenge.pub;
+        return { ok: true, status: 202, json: async () => ({ ok: true, message: genericMessage }) };
+      }
       if (url.pathname === "/api/auth/verify") {
         if (!verificationSucceeds) return { ok: false, status: 401, json: async () => ({ error: "invalid or expired code" }) };
-        return { ok: true, status: 200, json: async () => ({ ok: true, pub: "writer.substack.com", landing: "drafts", expiresAt: Date.now() + 60_000 }) };
+        return { ok: true, status: 200, json: async () => ({ ok: true, pub: currentPub, landing: currentLanding, expiresAt: Date.now() + 60_000 }) };
       }
       if (url.pathname === "/api/posts") return { ok: true, status: 200, json: async () => ({ drafts: [], published: [], totals: { drafts: 2, published: 4 } }) };
       throw new Error(`unexpected request: ${url.pathname}`);
@@ -116,4 +134,32 @@ test("login gate allows the verification tab and keeps access results generic", 
   assert.equal(get("main").style.display, "", "successful login reveals the app");
   assert.equal(get("v-library").classList.contains("on"), true, "direct publication login opens the drafts menu");
   assert.equal(get("v-dash").classList.contains("on"), false, "direct publication login skips the dashboard");
+
+  vm.runInContext("S.auth = null; S.ref = null; S.profileRef = null; S.pendingPub = ''; showLoginGate()", context);
+  resolvedInput = "https://substack.com/@writer";
+  get("auth-ref").value = resolvedInput;
+  const challengesBeforeProfile = calls.filter((call) => call.path === "/api/auth/challenge").length;
+  await get("auth-next").onclick();
+  assert.equal(get("auth-profile-picker").style.display, "", "profile input reveals its publication selector");
+  assert.equal(calls.filter((call) => call.path === "/api/auth/challenge").length, challengesBeforeProfile, "profile selection happens before creating a code draft");
+  get("auth-profile-pub").value = "writer.substack.com";
+  await get("auth-next").onclick();
+  assert.deepEqual(JSON.parse(calls.filter((call) => call.path === "/api/auth/challenge").at(-1).init.body), { pub: "writer.substack.com", landing: "dashboard" });
+
+  await get("auth-verify").onclick();
+  assert.equal(get("v-dash").classList.contains("on"), true, "profile login opens the publication selection dashboard");
+  assert.equal(get("dash-profile-picker").style.display, "");
+  assert.match(get("dash-pub-select").innerHTML, /second\.substack\.com/);
+
+  get("dash-pub-select").value = "second.substack.com";
+  get("dash-pub-select").onchange();
+  await get("dash-go").onclick();
+  assert.equal(get("welcome").classList.contains("on"), true, "another publication requires verification before opening");
+  await get("auth-next").onclick();
+  assert.deepEqual(JSON.parse(calls.filter((call) => call.path === "/api/auth/challenge").at(-1).init.body), { pub: "second.substack.com", landing: "dashboard" });
+  await get("auth-verify").onclick();
+  assert.equal(vm.runInContext("S.auth.pub", context), "second.substack.com");
+  assert.equal(get("v-dash").classList.contains("on"), true, "second verified publication returns to the selector dashboard");
+  await get("dash-go").onclick();
+  assert.equal(get("v-library").classList.contains("on"), true, "selected verified publication opens its drafts menu");
 });

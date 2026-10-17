@@ -385,8 +385,13 @@ a { color: var(--accent); }
 
   <section class="view" id="v-dash">
     <div class="card">
-      <h2><span class="step">✓</span>Sua publicação</h2>
+      <h2 id="dash-heading"><span class="step">✓</span>Sua publicação</h2>
       <div id="dash-info"></div>
+      <div id="dash-profile-picker" style="display:none;margin-top:12px">
+        <label class="auth-label" for="dash-pub-select">Selecione uma publicação</label>
+        <select id="dash-pub-select" style="width:100%"></select>
+        <p class="hint">Para abrir outra publicação, confirme o acesso com o código enviado a ela.</p>
+      </div>
       <div class="row" style="margin-top:12px">
         <button id="dash-go" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white text-base px-7 py-3">Revisar texto</button>
       </div>
@@ -494,6 +499,11 @@ a { color: var(--accent); }
         <input id="auth-ref" type="text" size="36" placeholder="https://voce.substack.com ou @voce" autocomplete="url" />
         <button id="auth-next" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Ir para o código</button>
       </div>
+      <div id="auth-profile-picker" style="display:none;margin-top:12px">
+        <label class="auth-label" for="auth-profile-pub">Publicações deste perfil</label>
+        <select id="auth-profile-pub" style="width:100%"></select>
+        <p class="hint">Cada publicação exige seu próprio código de verificação.</p>
+      </div>
       <p id="auth-setup-status" class="hint"></p>
       <div class="err" id="err-auth-setup"></div>
     </section>
@@ -507,6 +517,7 @@ a { color: var(--accent); }
       <p class="hint">A resposta será a mesma se o código estiver incorreto, expirado ou se o rascunho ainda não estiver disponível.</p>
       <div class="err" id="err-auth-code"></div>
     </section>
+    <button id="auth-cancel" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition" style="display:none;margin-top:12px">Voltar à seleção</button>
     <div style="margin-top:14px"><button id="auth-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button></div>
   </div>
 </div>
@@ -535,7 +546,7 @@ function toggleTheme() {
   try { localStorage.setItem('th_theme', next); } catch {}
   paintThemeBtn();
 }
-const S = { ref: null, pub: '', auth: null, posts: null, cur: null, decisions: {}, groupDeselect: new Set(), editorUrl: null, isPublished: false, lastApplied: 0, admin: null };
+const S = { ref: null, profileRef: null, pendingPub: '', returningAuth: null, pub: '', auth: null, posts: null, cur: null, decisions: {}, groupDeselect: new Set(), editorUrl: null, isPublished: false, lastApplied: 0, admin: null };
 function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = 'pill' + (cls ? ' ' + cls : ''); }
 function showErr(m, where) { const el = $(where); if (el) { el.style.display = 'block'; el.textContent = m; } setStatus('erro', 'err'); }
 function clearErrs() { document.querySelectorAll('.err').forEach(e => { e.style.display = 'none'; e.textContent = ''; }); }
@@ -829,6 +840,7 @@ function showLoginGate() {
   $('topbar').style.display = 'none';
   $('main').style.display = 'none';
   $('logout').style.display = 'none';
+  $('auth-cancel').style.display = S.returningAuth ? '' : 'none';
   document.body.classList.add('bare');
   setAuthTab('setup');
 }
@@ -847,26 +859,56 @@ async function loadAuthConfig() {
     $('auth-reviewer-email').textContent = '(e-mail da conta revisora indisponível)';
   }
 }
+function profileInputMatches(input, handle) {
+  const value = String(input || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  const profilePath = `substack.com/@${handle}`;
+  const wwwProfilePath = `www.${profilePath}`;
+  return value === `@${handle}` || value === profilePath || value.startsWith(`${profilePath}/`) || value === wwwProfilePath || value.startsWith(`${wwwProfilePath}/`);
+}
+function setPublicationOptions(select, publications, selectedHost) {
+  select.innerHTML = publications.map((pub) => `<option value="${esc(pub.host)}">${esc(pub.name)} · ${esc(pub.host)}</option>`).join("");
+  if (selectedHost && publications.some((pub) => pub.host === selectedHost)) select.value = selectedHost;
+}
 async function requestVerificationDraft() {
   clearErrs();
   const input = $('auth-ref').value.trim();
-  if (!input) { showErr('Informe o link do seu perfil ou publicação no Substack.', 'err-auth-setup'); return; }
+  if (!input && !S.pendingPub) { showErr('Informe o link do seu perfil ou publicação no Substack.', 'err-auth-setup'); return; }
   $('auth-next').disabled = true;
   $('auth-setup-status').textContent = 'Preparando a verificação…';
   try {
-    const resolved = await apiFetch('/api/resolve?input=' + encodeURIComponent(input));
-    const ref = await resolved.json();
-    if (!resolved.ok || ref.error) throw new Error('Não encontramos esse perfil ou publicação. Confira o link e tente novamente.');
-    const landing = ref.kind === 'publication' ? 'drafts' : 'dashboard';
-    let pub = ref.host || '';
-    if (!pub && ref.handle) {
-      const publication = await apiFetch('/api/resolve?input=' + encodeURIComponent(ref.handle + '.substack.com'));
-      const result = await publication.json();
-      if (publication.ok && result.kind === 'publication') { pub = result.host; Object.assign(ref, result); }
+    let ref, pub, landing;
+    if (S.pendingPub) {
+      ref = S.profileRef;
+      pub = S.pendingPub;
+      landing = 'dashboard';
+    } else if (S.profileRef && profileInputMatches(input, S.profileRef.handle)) {
+      ref = S.profileRef;
+      pub = $('auth-profile-pub').value;
+      landing = 'dashboard';
+    } else {
+      S.profileRef = null;
+      $('auth-profile-picker').style.display = 'none';
+      const resolved = await apiFetch('/api/resolve?input=' + encodeURIComponent(input));
+      ref = await resolved.json();
+      if (!resolved.ok || ref.error) throw new Error('Não encontramos esse perfil ou publicação. Confira o link e tente novamente.');
+      if (ref.kind === 'profile') {
+        if (!Array.isArray(ref.publications) || !ref.publications.length) throw new Error('Não encontramos publicações públicas nesse perfil. Informe o link direto da publicação.');
+        S.profileRef = ref;
+        S.ref = ref;
+        try { localStorage.setItem('th_ref', JSON.stringify(ref)); } catch {}
+        setPublicationOptions($('auth-profile-pub'), ref.publications, ref.publications[0].host);
+        $('auth-profile-picker').style.display = '';
+        $('auth-next').textContent = 'Ir para o código';
+        $('auth-setup-status').textContent = 'Selecione uma publicação para verificar o acesso.';
+        return;
+      }
+      pub = ref.host;
+      landing = 'drafts';
     }
-    if (!pub) throw new Error('Informe o link de uma publicação do Substack para continuar.');
+    if (!pub) throw new Error('Selecione uma publicação para continuar.');
     S.ref = ref;
     S.pub = pub;
+    $('auth-profile-picker').style.display = 'none';
     try { localStorage.setItem('th_ref', JSON.stringify(ref)); } catch {}
     const r = await apiFetch('/api/auth/challenge', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -894,13 +936,17 @@ async function verifyLoginCode() {
     if (!r.ok || !j.ok) throw new Error('Código inválido ou expirado. Confira o título do rascunho e tente novamente.');
     S.auth = j;
     S.pub = j.pub;
-    if (!S.ref || S.ref.host !== j.pub) S.ref = { kind: 'publication', host: j.pub, handle: j.pub.split('.')[0], name: j.pub };
+    S.pendingPub = '';
+    S.returningAuth = null;
+    if (S.ref?.kind === 'profile' && S.ref.publications?.some((pub) => pub.host === j.pub)) S.profileRef = S.ref;
+    else if (!S.ref || S.ref.host !== j.pub) S.ref = { kind: 'publication', host: j.pub, handle: j.pub.split('.')[0], name: j.pub };
     try { localStorage.setItem('th_ref', JSON.stringify(S.ref)); } catch {}
     $('welcome').classList.remove('on');
     document.body.classList.remove('bare');
     $('topbar').style.display = '';
     $('main').style.display = '';
     $('logout').style.display = '';
+    $('auth-cancel').style.display = 'none';
     $('auth-code').value = '';
     setStatus('pronto');
     if (j.landing === 'drafts') {
@@ -919,9 +965,25 @@ $('auth-next').onclick = requestVerificationDraft;
 $('auth-ref').addEventListener('keydown', (e) => { if (e.key === 'Enter') requestVerificationDraft(); });
 $('auth-verify').onclick = verifyLoginCode;
 $('auth-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyLoginCode(); });
+$('auth-cancel').onclick = async () => {
+  if (!S.returningAuth) return;
+  S.auth = S.returningAuth;
+  S.returningAuth = null;
+  S.pendingPub = '';
+  $('welcome').classList.remove('on');
+  document.body.classList.remove('bare');
+  $('topbar').style.display = '';
+  $('main').style.display = '';
+  $('logout').style.display = '';
+  $('auth-cancel').style.display = 'none';
+  await showDash();
+};
 $('auth-theme').onclick = toggleTheme;
 $('logout').onclick = async () => {
   try { await apiFetch('/api/auth/logout', { method: 'POST' }); } catch {}
+  S.profileRef = null;
+  S.pendingPub = '';
+  S.returningAuth = null;
   expireLogin();
 };
 
@@ -1008,6 +1070,16 @@ $('tut-check').onclick = async () => {
 async function showDash() {
   showView('dash');
   const ref = S.ref || {};
+  const profilePublications = ref.kind === 'profile' && Array.isArray(ref.publications) ? ref.publications : [];
+  const hasProfilePublications = profilePublications.length > 0;
+  $('dash-profile-picker').style.display = hasProfilePublications ? '' : 'none';
+  $('dash-heading').innerHTML = hasProfilePublications ? '<span class="step">✓</span>Suas publicações' : '<span class="step">✓</span>Sua publicação';
+  if (hasProfilePublications) {
+    setPublicationOptions($('dash-pub-select'), profilePublications, S.pub);
+    $('dash-go').textContent = $('dash-pub-select').value === S.pub ? 'Abrir rascunhos' : 'Verificar acesso e abrir';
+  } else {
+    $('dash-go').textContent = 'Revisar texto';
+  }
   let counts = '';
   try {
     const r = await apiFetch('/api/posts?limit=1', { headers: H() });
@@ -1023,7 +1095,19 @@ async function showDash() {
     `<p class="hint" style="margin:0 0 8px">${S.pub ? `<a href="https://${esc(S.pub)}" target="_blank" rel="noopener">${esc(S.pub)}</a>` : esc(ref.handle || '')}${counts ? ' · ' + counts : ''}</p>` +
     `<p class="hint" style="margin:0">Acesso confirmado ✓ (${who})</p>`;
 }
-$('dash-go').onclick = () => { showView('library'); loadLibrary(); };
+$('dash-pub-select').onchange = () => {
+  $('dash-go').textContent = $('dash-pub-select').value === S.pub ? 'Abrir rascunhos' : 'Verificar acesso e abrir';
+};
+$('dash-go').onclick = () => {
+  const selected = $('dash-profile-picker').style.display === 'none' ? S.pub : $('dash-pub-select').value;
+  if (!selected || selected === S.pub) { showView('library'); loadLibrary(); return; }
+  S.pendingPub = selected;
+  S.returningAuth = S.auth;
+  $('auth-ref').value = selected;
+  $('auth-profile-picker').style.display = 'none';
+  $('auth-setup-status').textContent = 'Adicione a conta revisora a esta publicação e depois solicite o código.';
+  showLoginGate();
+};
 function fmtDate(d) { try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return ''; } }
 function fmtStat(v) { return v == null ? '—' : String(v); }
 function libCard(p) {
@@ -1539,7 +1623,8 @@ async function boot() {
     S.auth = session;
     S.pub = session.pub;
     try { S.ref = JSON.parse(localStorage.getItem('th_ref') || 'null'); } catch { S.ref = null; }
-    if (!S.ref || S.ref.host !== session.pub) S.ref = { kind: 'publication', host: session.pub, handle: session.pub.split('.')[0], name: session.pub };
+    if (S.ref?.kind === 'profile' && S.ref.publications?.some((pub) => pub.host === session.pub)) S.profileRef = S.ref;
+    else if (!S.ref || S.ref.host !== session.pub) S.ref = { kind: 'publication', host: session.pub, handle: session.pub.split('.')[0], name: session.pub };
     $('welcome').classList.remove('on');
     document.body.classList.remove('bare');
     $('topbar').style.display = '';

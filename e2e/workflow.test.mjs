@@ -110,6 +110,17 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
     if (url.hostname !== "e2e-example.substack.com" && url.hostname !== "substack.com") {
       throw new Error(`unexpected external request in E2E: ${url.hostname}`);
     }
+    if (url.pathname === "/api/v1/user/e2e-writer/public_profile") {
+      assert.equal(new Headers(init.headers).get("cookie"), null, "public profile lookup does not send the reviewer SID");
+      return response({
+        id: 88, handle: "e2e-writer", name: "E2E Writer",
+        publications: [
+          { name: "First publication", subdomain: "e2e-example" },
+          { name: "Second publication", subdomain: "e2e-second" },
+        ],
+        subscriptions: [{ name: "Unrelated subscription", subdomain: "unrelated" }],
+      });
+    }
     assert.equal(new Headers(init.headers).get("cookie"), "substack.sid=e2e-fake-session");
     if (url.pathname === "/api/v1/user/profile/self") {
       return response({ id: 77, handle: "typo-reviewer", publications: [] });
@@ -165,6 +176,11 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   assert.equal(anonymousPosts.status, 401, "draft APIs must be gated before login");
   const anonymousConfig = await realFetch(`${baseUrl}/api/config`);
   assert.equal((await anonymousConfig.json()).reviewerEmail, "reviewer@example.test", "reviewer email remains available before login");
+  const profileResponse = await realFetch(`${baseUrl}/api/resolve?input=${encodeURIComponent("@e2e-writer")}`);
+  const profile = await profileResponse.json();
+  assert.equal(profile.kind, "profile");
+  assert.deepEqual(profile.publications.map((pub) => pub.host), ["e2e-example.substack.com", "e2e-second.substack.com"]);
+  assert.equal(profile.publications.some((pub) => pub.host === "unrelated.substack.com"), false, "the profile selector excludes publications the writer only subscribes to");
   const challengeRequest = (cookie = "") => realFetch(`${baseUrl}/api/auth/challenge`, {
     method: "POST", headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
     body: JSON.stringify({ pub: "e2e-example.substack.com", landing: "drafts" }),
