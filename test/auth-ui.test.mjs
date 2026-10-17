@@ -110,10 +110,11 @@ test("login gate presents setup and verification as sequential steps", async () 
   get("welcome-start").onclick();
   assert.equal(get("welcome-intro").style.display, "none");
   assert.equal(get("welcome-auth").style.display, "");
-  assert.notEqual(get("auth-panel-setup").style.display, "none", "contributor setup is the first step");
-  assert.notEqual(get("auth-panel-code").style.display, "none", "verification follows setup on the same page");
+  assert.equal(get("auth-flow-track").style.transform, "translateY(0)", "authentication starts on the setup card");
+  assert.ok(html.indexOf('id="auth-screen-setup"') < html.indexOf('id="auth-screen-code"'), "the setup card comes first");
   assert.ok(html.indexOf('id="auth-panel-setup"') < html.indexOf('id="auth-panel-code"'), "setup appears before verification");
   assert.doesNotMatch(html, /auth-tab|role="tablist"/, "the login flow has no tabs");
+  assert.match(html, /\.auth-flow\{[^}]*overflow:hidden/s, "the step track clips free page scrolling");
   for (let attempt = 0; attempt < 20 && get("auth-reviewer-email")?.textContent !== "reviewer@example.test"; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
@@ -124,8 +125,11 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.ok(calls.some((call) => call.path === "/api/auth/challenge"), "setup submits a challenge request");
   const challengeCall = calls.find((call) => call.path === "/api/auth/challenge");
   assert.deepEqual(JSON.parse(challengeCall.init.body), { pub: "writer.substack.com", landing: "drafts" });
-  assert.notEqual(get("auth-panel-code").style.display, "none");
+  assert.equal(get("auth-flow-track").style.transform, "translateY(-50%)", "requesting the code moves to the next full-screen card");
   assert.match(get("auth-setup-status").textContent, /rascunho temporário/);
+  get("auth-prev-step").onclick();
+  assert.equal(get("auth-flow-track").style.transform, "translateY(0)", "the back control returns to setup");
+  vm.runInContext("focusVerificationStep()", context);
 
   get("auth-code").value = "wrong-code";
   await get("auth-verify").onclick();
