@@ -37,6 +37,11 @@ function element(id) {
 
 test("login gate presents setup and verification as sequential steps", async () => {
   const elements = new Map();
+  const authSlides = ["auth-screen-welcome", "auth-screen-setup", "auth-screen-code"].map((id) => element(id));
+  authSlides.forEach((slide) => elements.set(slide.id, slide));
+  const authStage = element("welcome-auth");
+  authStage.querySelectorAll = (selector) => selector === ".auth-screen" ? authSlides : [];
+  elements.set(authStage.id, authStage);
   const calls = [];
   let verificationSucceeds = false;
   let resolvedInput = "writer.substack.com";
@@ -111,6 +116,9 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.equal(get("auth-screen-welcome").getAttribute("aria-hidden"), "false", "the welcome presentation is visible first");
   assert.equal(get("auth-screen-setup").getAttribute("aria-hidden"), "true");
   assert.equal(get("auth-screen-setup").inert, true);
+  assert.equal(get("auth-screen-welcome").style.transform, "translateY(0%)");
+  assert.equal(get("auth-screen-setup").style.transform, "translateY(100%)");
+  assert.equal(get("auth-screen-code").style.transform, "translateY(200%)");
   assert.match(html, /id="welcome-intro"[\s\S]*?sem copiar e colar/);
   assert.doesNotMatch(html, /auth-step-number">\d+<\/span><h2>Apresentação/, "welcome has no step number");
   assert.match(html, /auth-step-number">1<\/span><h2 id="auth-setup-title"/);
@@ -121,6 +129,9 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.equal(get("welcome-auth").getAttribute("data-slide"), "1", "start advances to contributor setup");
   assert.equal(get("auth-screen-welcome").getAttribute("aria-hidden"), "true");
   assert.equal(get("auth-screen-setup").getAttribute("aria-hidden"), "false");
+  assert.equal(get("auth-screen-welcome").style.transform, "translateY(-100%)");
+  assert.equal(get("auth-screen-setup").style.transform, "translateY(0%)");
+  assert.equal(get("auth-screen-code").style.transform, "translateY(100%)");
   assert.notEqual(get("auth-panel-setup").style.display, "none", "contributor setup is the first step");
   assert.notEqual(get("auth-panel-code").style.display, "none", "verification follows setup on the same page");
   assert.equal(get("welcome-auth").getAttribute("data-slide"), "1", "contributor setup is active after start");
@@ -132,11 +143,10 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.ok(html.indexOf('id="auth-screen-setup"') < html.indexOf('id="auth-screen-code"'), "setup screen precedes code screen");
   assert.doesNotMatch(html, /auth-tab|role="tablist"/, "the login flow has no tabs");
   assert.match(html, /\.auth-flow\{[^}]*overflow:hidden/s, "the stage clips page scrolling");
-  assert.match(html, /\.auth-track\{[^}]*height:300%/s, "the track provides three full-screen positions");
-  assert.match(html, /\.auth-screen\{[^}]*flex:0 0 33\.333333%;[^}]*height:33\.333333%/s, "each screen fills one viewport position");
+  assert.match(html, /\.auth-track\{[^}]*height:100%/s, "the track fills the viewport regardless of slide count");
+  assert.match(html, /\.auth-screen\{[^}]*position:absolute;inset:0;[^}]*height:100%/s, "each screen independently fills the viewport");
   assert.match(html, /\.auth-dialog\{[^}]*height:100%/s, "each card fills its screen vertically");
-  assert.match(html, /#welcome-auth\[data-slide="1"\] \.auth-track\{transform:translateY\(-33\.333333%\)/, "start moves the track directly to contributor setup");
-  assert.match(html, /#welcome-auth\[data-slide="2"\] \.auth-track\{transform:translateY\(-66\.666667%\)/, "verification follows setup as the third screen");
+  assert.match(appSrc, /function setAuthSlide\(index\)[\s\S]*slides\.forEach\(\(slide, position\)[\s\S]*translateY\(\$\{\(position - active\) \* 100\}%\)/, "slide positions are calculated from the active index, not a fixed screen count");
   assert.match(html, /body\.bare\{overflow:hidden\}/, "the document cannot scroll behind the cards");
   assert.match(html, /id="auth-prev-step"[^>]*>← Voltar à configuração/);
   assert.match(html, /id="auth-back"[^>]*>← Voltar à apresentação/);
@@ -220,4 +230,12 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.match(get("dash-publications").innerHTML, /writer\.substack\.com[\s\S]*?A verificar/);
   await vm.runInContext("openProfilePublication('second.substack.com')", context);
   assert.equal(get("v-library").classList.contains("on"), true, "selected verified publication opens its drafts menu");
+
+  const futureSlide = element("auth-screen-future");
+  authSlides.push(futureSlide);
+  vm.runInContext("setAuthSlide(3)", context);
+  assert.equal(get("welcome-auth").getAttribute("data-slide"), "3", "the slide navigator supports additional screens without CSS changes");
+  assert.equal(futureSlide.style.transform, "translateY(0%)");
+  assert.equal(futureSlide.getAttribute("aria-hidden"), "false");
+  assert.equal(futureSlide.inert, false);
 });
