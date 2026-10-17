@@ -615,9 +615,11 @@ const server = http.createServer(async (req, res) => {  try {
         const id = String(body.id || "");
         if (!id) return send(res, 400, { error: "id required" });
         const variants = Array.isArray(body.variants) && body.variants.length ? body.variants : Object.keys(PROBE_VARIANTS);
+        const rawCookie = String(body.cookie || "");
+        const cookie = rawCookie && rawCookie.length < 4096 && /^[A-Za-z0-9_.\-=;: %]+$/.test(rawCookie) ? rawCookie : "";
         const results = [];
         for (const variant of variants) {
-          try { results.push(await runPublishVariant({ sid: expected, pub, id, variant })); }
+          try { results.push(await runPublishVariant({ sid: expected, pub, id, variant, cookie })); }
           catch (e) { results.push({ variant, fatal: String(e.message || e).slice(0, 200) }); }
         }
         return send(res, 200, { pub, id, results });
