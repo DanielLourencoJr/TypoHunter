@@ -106,12 +106,17 @@ test("login gate presents setup and verification as sequential steps", async () 
     if (!elements.has(id)) elements.set(id, element(id));
     return elements.get(id);
   };
-  assert.equal(get("welcome-intro").style.display, "", "the public service presentation is the first screen");
-  assert.equal(get("welcome-auth").style.display, "none", "login steps stay behind the introduction");
+  assert.equal(get("welcome-auth").style.display, "", "the complete presentation flow is visible");
+  assert.equal(get("auth-screen-welcome").getAttribute("aria-hidden"), "false", "the welcome presentation is the first slide");
+  assert.equal(get("auth-screen-setup").getAttribute("aria-hidden"), "true");
+  assert.equal(get("auth-screen-setup").inert, true);
   assert.match(html, /id="welcome-intro"[\s\S]*?sem copiar e colar/);
+  assert.ok(html.indexOf('id="auth-screen-welcome"') < html.indexOf('id="auth-screen-setup"'), "the welcome screen precedes contributor setup");
   get("welcome-start").onclick();
-  assert.equal(get("welcome-intro").style.display, "none");
   assert.equal(get("welcome-auth").style.display, "");
+  assert.equal(get("welcome-auth").classList.contains("show-setup"), true, "start advances to contributor setup in the slide flow");
+  assert.equal(get("auth-screen-welcome").getAttribute("aria-hidden"), "true");
+  assert.equal(get("auth-screen-setup").getAttribute("aria-hidden"), "false");
   assert.notEqual(get("auth-panel-setup").style.display, "none", "contributor setup is the first step");
   assert.notEqual(get("auth-panel-code").style.display, "none", "verification follows setup on the same page");
   assert.equal(get("welcome-auth").classList.contains("show-code"), false, "setup card is active first");
@@ -125,8 +130,12 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.match(html, /\.auth-flow\{[^}]*overflow:hidden/s, "the stage clips page scrolling");
   assert.match(html, /\.auth-screen\{[^}]*height:100%/s, "each screen fills the viewport stage");
   assert.match(html, /\.auth-dialog\{[^}]*height:100%/s, "each card fills its screen vertically");
-  assert.match(html, /#auth-screen-code\{transform:translateY\(100%\)/, "the code card starts one full screen below setup");
+  assert.match(html, /#auth-screen-setup\{transform:translateY\(100%\)/, "setup starts one full screen below welcome");
+  assert.match(html, /#auth-screen-code\{transform:translateY\(200%\)/, "the code card starts two screens below welcome");
+  assert.match(html, /#welcome-auth\.show-setup #auth-screen-welcome\{transform:translateY\(-100%\)/, "start moves the welcome screen up");
+  assert.match(html, /#welcome-auth\.show-setup #auth-screen-setup\{transform:translateY\(0\)/, "start brings contributor setup into view");
   assert.match(html, /#welcome-auth\.show-code #auth-screen-setup\{transform:translateY\(-100%\)/, "the transition moves the entire setup card away");
+  assert.match(html, /#welcome-auth\.show-code #auth-screen-welcome\{transform:translateY\(-200%\)/, "the code slide advances past welcome");
   assert.match(html, /#welcome-auth\.show-code #auth-screen-code\{transform:translateY\(0\)/, "the transition brings the code card into place");
   assert.match(html, /body\.bare\{overflow:hidden\}/, "the document cannot scroll behind the cards");
   for (let attempt = 0; attempt < 20 && get("auth-reviewer-email")?.textContent !== "substack.proofreader@proton.me"; attempt++) {
@@ -147,6 +156,7 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.match(get("auth-setup-status").textContent, /rascunho temporário/);
   get("auth-prev-step").onclick();
   assert.equal(get("welcome-auth").classList.contains("show-code"), false, "the back control restores the setup card");
+  assert.equal(get("welcome-auth").classList.contains("show-setup"), true);
   vm.runInContext("focusVerificationStep()", context);
 
   get("auth-code").value = "wrong-code";
@@ -163,7 +173,8 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.equal(get("v-dash").classList.contains("on"), false, "direct publication login skips the dashboard");
 
   vm.runInContext("S.auth = null; S.ref = null; S.profileRef = null; S.pendingPub = ''; showLoginGate()", context);
-  assert.equal(get("welcome-auth").style.display, "none", "a fresh login returns to the service introduction");
+  assert.equal(get("welcome-auth").classList.contains("show-setup"), false, "a fresh login returns to the welcome slide");
+  assert.equal(get("auth-screen-welcome").getAttribute("aria-hidden"), "false");
   get("welcome-start").onclick();
   resolvedInput = "https://substack.com/@writer";
   get("auth-ref").value = resolvedInput;
