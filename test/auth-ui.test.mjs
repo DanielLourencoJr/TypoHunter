@@ -138,6 +138,8 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.match(html, /#welcome-auth\.show-code #auth-screen-welcome\{transform:translateY\(-200%\)/, "the code slide advances past welcome");
   assert.match(html, /#welcome-auth\.show-code #auth-screen-code\{transform:translateY\(0\)/, "the transition brings the code card into place");
   assert.match(html, /body\.bare\{overflow:hidden\}/, "the document cannot scroll behind the cards");
+  assert.match(html, /id="auth-prev-step"[^>]*>← Voltar à configuração/);
+  assert.doesNotMatch(html, /Voltar à etapa 1/);
   for (let attempt = 0; attempt < 20 && get("auth-reviewer-email")?.textContent !== "substack.proofreader@proton.me"; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
@@ -155,8 +157,12 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.equal(get("auth-screen-code").inert, false);
   assert.match(get("auth-setup-status").textContent, /rascunho temporário/);
   get("auth-prev-step").onclick();
-  assert.equal(get("welcome-auth").classList.contains("show-code"), false, "the back control restores the setup card");
+  assert.equal(get("welcome-auth").classList.contains("show-code"), false, "the back control restores the setup slide");
   assert.equal(get("welcome-auth").classList.contains("show-setup"), true);
+  assert.equal(get("auth-screen-setup").getAttribute("aria-hidden"), "false");
+  assert.equal(get("auth-screen-code").getAttribute("aria-hidden"), "true");
+  assert.equal(get("auth-screen-setup").inert, false);
+  assert.equal(get("auth-screen-code").inert, true);
   vm.runInContext("focusVerificationStep()", context);
 
   get("auth-code").value = "wrong-code";

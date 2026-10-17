@@ -581,7 +581,7 @@ a { color: var(--accent); }
           <div class="err" id="err-auth-code"></div>
         </section>
         <div class="auth-footer">
-          <button id="auth-prev-step" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">← Voltar à etapa 1</button>
+          <button id="auth-prev-step" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">← Voltar à configuração</button>
           <button id="auth-cancel" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition" style="display:none">Voltar à seleção</button>
           <span class="spacer"></span>
           <button id="auth-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button>
@@ -925,6 +925,10 @@ function focusSetupStep() {
   $('auth-screen-setup').inert = false;
   $('auth-screen-code').inert = true;
 }
+function returnToSetup() {
+  focusSetupStep();
+  $('auth-ref').focus({ preventScroll: true });
+}
 function showLoginGate() {
   S.auth = null;
   S.admin = null;
@@ -1061,7 +1065,7 @@ $('auth-back').onclick = () => {
   if (S.returningAuth) return;
   focusWelcomeScreen();
 };
-$('auth-prev-step').onclick = focusSetupStep;
+$('auth-prev-step').onclick = returnToSetup;
 $('w-theme').onclick = toggleTheme;
 $('auth-next').onclick = requestVerificationDraft;
 $('auth-ref').addEventListener('keydown', (e) => { if (e.key === 'Enter') requestVerificationDraft(); });
