@@ -73,6 +73,9 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 .dialog p{line-height:1.7;font-size:16px;color:var(--muted)}
 .auth-dialog{max-width:640px;text-align:left;max-height:calc(100vh - 40px);overflow:auto}
 .auth-dialog>p:first-child,.auth-dialog>h1{text-align:center}
+.welcome-intro{max-width:560px;text-align:center}
+.welcome-intro p{max-width:500px;margin:16px auto 22px}
+.welcome-intro h1{font-size:clamp(32px,6vw,48px);letter-spacing:-.04em}
 .auth-tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:18px 0 14px}
 .auth-tab{border:0;border-bottom:2px solid transparent;background:transparent;padding:10px 12px;color:var(--muted);font:600 13px var(--font-ui);cursor:pointer}
 .auth-tab.active{color:var(--ink);border-bottom-color:var(--accent)}
@@ -478,7 +481,14 @@ a { color: var(--accent); }
 </main>
 
 <div id="welcome">
-  <div class="dialog auth-dialog ring-1 ring-black/5 dark:ring-white/10">
+  <div class="dialog welcome-intro ring-1 ring-black/5 dark:ring-white/10" id="welcome-intro">
+    <p class="font-ui text-xs uppercase tracking-widest opacity-60">Substack · revisão de texto</p>
+    <h1 class="font-text">TypoHunter</h1>
+    <p>Seus textos do Substack revisados sem copiar e colar: a ferramenta lê seu rascunho e sugere <strong>apenas</strong> correções de typos e gramática, sem mexer na sua voz, estrutura ou imagens. Você aprova cada sugestão antes de atualizar o post.</p>
+    <button id="welcome-start" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white text-base px-7 py-3">Começar</button>
+    <div style="margin-top:14px"><button id="w-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button></div>
+  </div>
+  <div class="dialog auth-dialog ring-1 ring-black/5 dark:ring-white/10" id="welcome-auth" style="display:none">
     <p class="font-ui text-xs uppercase tracking-widest opacity-60">Substack · revisão de texto</p>
     <h1 class="font-text">TypoHunter</h1>
     <div class="auth-tabs" role="tablist" aria-label="Entrar no TypoHunter">
@@ -517,6 +527,7 @@ a { color: var(--accent); }
       <p class="hint">A resposta será a mesma se o código estiver incorreto, expirado ou se o rascunho ainda não estiver disponível.</p>
       <div class="err" id="err-auth-code"></div>
     </section>
+    <button id="auth-back" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition" style="margin-top:12px">← Voltar</button>
     <button id="auth-cancel" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition" style="display:none;margin-top:12px">Voltar à seleção</button>
     <div style="margin-top:14px"><button id="auth-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button></div>
   </div>
@@ -840,9 +851,17 @@ function showLoginGate() {
   $('topbar').style.display = 'none';
   $('main').style.display = 'none';
   $('logout').style.display = 'none';
+  $('welcome-intro').style.display = S.returningAuth ? 'none' : '';
+  $('welcome-auth').style.display = S.returningAuth ? '' : 'none';
   $('auth-cancel').style.display = S.returningAuth ? '' : 'none';
   document.body.classList.add('bare');
   setAuthTab('setup');
+}
+function showAuthGate() {
+  $('welcome-intro').style.display = 'none';
+  $('welcome-auth').style.display = '';
+  setAuthTab('setup');
+  $('auth-ref').focus();
 }
 function expireLogin() {
   S.auth = null;
@@ -961,6 +980,13 @@ async function verifyLoginCode() {
 }
 $('auth-tab-setup').onclick = () => setAuthTab('setup');
 $('auth-tab-code').onclick = () => setAuthTab('code');
+$('welcome-start').onclick = showAuthGate;
+$('auth-back').onclick = () => {
+  if (S.returningAuth) return;
+  $('welcome-auth').style.display = 'none';
+  $('welcome-intro').style.display = '';
+};
+$('w-theme').onclick = toggleTheme;
 $('auth-next').onclick = requestVerificationDraft;
 $('auth-ref').addEventListener('keydown', (e) => { if (e.key === 'Enter') requestVerificationDraft(); });
 $('auth-verify').onclick = verifyLoginCode;

@@ -104,6 +104,12 @@ test("login gate allows the verification tab and keeps access results generic", 
     if (!elements.has(id)) elements.set(id, element(id));
     return elements.get(id);
   };
+  assert.equal(get("welcome-intro").style.display, "", "the public service presentation is the first screen");
+  assert.equal(get("welcome-auth").style.display, "none", "login steps stay behind the introduction");
+  assert.match(html, /id="welcome-intro"[\s\S]*?sem copiar e colar/);
+  get("welcome-start").onclick();
+  assert.equal(get("welcome-intro").style.display, "none");
+  assert.equal(get("welcome-auth").style.display, "");
   assert.equal(get("auth-tab-code").getAttribute("aria-selected"), "false");
   get("auth-tab-code").onclick();
   assert.equal(get("auth-panel-code").style.display, "");
@@ -136,6 +142,8 @@ test("login gate allows the verification tab and keeps access results generic", 
   assert.equal(get("v-dash").classList.contains("on"), false, "direct publication login skips the dashboard");
 
   vm.runInContext("S.auth = null; S.ref = null; S.profileRef = null; S.pendingPub = ''; showLoginGate()", context);
+  assert.equal(get("welcome-auth").style.display, "none", "a fresh login returns to the service introduction");
+  get("welcome-start").onclick();
   resolvedInput = "https://substack.com/@writer";
   get("auth-ref").value = resolvedInput;
   const challengesBeforeProfile = calls.filter((call) => call.path === "/api/auth/challenge").length;
@@ -155,6 +163,7 @@ test("login gate allows the verification tab and keeps access results generic", 
   get("dash-pub-select").onchange();
   await get("dash-go").onclick();
   assert.equal(get("welcome").classList.contains("on"), true, "another publication requires verification before opening");
+  assert.equal(get("welcome-auth").style.display, "", "switching publication opens authentication directly");
   await get("auth-next").onclick();
   assert.deepEqual(JSON.parse(calls.filter((call) => call.path === "/api/auth/challenge").at(-1).init.body), { pub: "second.substack.com", landing: "dashboard" });
   await get("auth-verify").onclick();
