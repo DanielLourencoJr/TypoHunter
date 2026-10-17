@@ -131,14 +131,15 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 .libcard h4{margin:0 0 4px;font-size:14px;font-family:var(--font-text)}
 .libcard small{color:var(--muted);font-size:12px}
 .stats{display:flex;gap:10px;margin-top:6px;font-size:12px;color:var(--muted)}
-.libcard.draft-card{display:flex;align-items:center;gap:14px;min-width:0;min-height:88px;padding:12px;border-radius:14px;box-shadow:var(--cardshadow);transition:transform .15s,border-color .15s,box-shadow .15s}
-.libcard.draft-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 8px 24px rgba(0,0,0,.12)}
-.libcard.draft-card:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-.draft-card-cover{display:grid;place-items:center;flex:none;width:60px;height:60px;overflow:hidden;border-radius:12px;background:var(--accent-bg);color:var(--accent);font:700 22px var(--font-ui);object-fit:cover}
-.draft-card-copy{display:flex;flex:1;flex-direction:column;gap:4px;min-width:0;text-align:left}
-.draft-card-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:650 15px var(--font-ui)}
-.draft-card-meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font:12px var(--font-ui)}
-.draft-card-audience{align-self:flex-start;margin-top:2px;border-radius:999px;padding:3px 8px;background:var(--soft);color:var(--muted);font:600 11px var(--font-ui)}
+.libcard.post-card{display:flex;align-items:center;gap:14px;min-width:0;min-height:88px;padding:12px;border-radius:14px;box-shadow:var(--cardshadow);transition:transform .15s,border-color .15s,box-shadow .15s}
+.libcard.post-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.libcard.post-card:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.post-card-cover{display:grid;place-items:center;flex:none;width:60px;height:60px;overflow:hidden;border-radius:12px;background:var(--accent-bg);color:var(--accent);font:700 22px var(--font-ui);object-fit:cover}
+.post-card-copy{display:flex;flex:1;flex-direction:column;gap:4px;min-width:0;text-align:left}
+.post-card-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:650 15px var(--font-ui)}
+.post-card-meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font:12px var(--font-ui)}
+.post-card-detail{align-self:flex-start;margin-top:2px;border-radius:999px;padding:3px 8px;background:var(--soft);color:var(--muted);font:600 11px var(--font-ui)}
+.post-card-stats{display:flex;flex-wrap:wrap;gap:9px;margin-top:2px;color:var(--muted);font:12px var(--font-ui)}
 .badge{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted);white-space:nowrap}
 /* doc + diffs */
 .doc{line-height:1.75;font-size:17px;max-width:680px;margin:0 auto}
@@ -1242,18 +1243,15 @@ $('dash-go').onclick = () => {
 function fmtDate(d) { try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return ''; } }
 function fmtStat(v) { return v == null ? '—' : String(v); }
 function libCard(p) {
-  if (!p.published) {
-    const initial = esc(Array.from(p.title || '•')[0] || '•').toUpperCase();
-    const cover = p.cover
-      ? `<img class="draft-card-cover" src="${esc(p.cover)}" loading="lazy" alt="" />`
-      : `<span class="draft-card-cover" aria-hidden="true">${initial}</span>`;
-    const meta = `${fmtDate(p.date)}${p.words != null ? ` · ${p.words} palavras` : ''}`;
-    return `<button class="libcard draft-card" data-id="${esc(p.id)}">${cover}<span class="draft-card-copy"><span class="draft-card-title">${esc(p.title || '(sem título)')}</span><span class="draft-card-meta">${meta}</span><span class="draft-card-audience">${esc(p.audience || 'everyone')}</span></span></button>`;
-  }
-  const cover = p.cover ? `<img class="cover" src="${esc(p.cover)}" loading="lazy" alt="" />` : `<div class="nocover">sem capa</div>`;
-  const stats = `<div class="stats"><span>👁 ${fmtStat(p.views)}</span><span>♥ ${fmtStat(p.likes)}</span><span>💬 ${p.comments ?? '—'}</span>${p.restacks != null ? `<span>🔁 ${p.restacks}</span>` : ''}</div>`;
-  return `<button class="libcard transition duration-150 hover:-translate-y-0.5 hover:shadow-xl" data-id="${p.id}">${cover}<div class="pad"><h4>${esc(p.title || '(sem título)')}</h4>` +
-    `<small>${fmtDate(p.date)}${p.slug ? ' · /' + esc(p.slug) : ''}${p.words != null ? ` · ${p.words} palavras` : ''}</small>${stats}</div></button>`;
+  const initial = esc(Array.from(p.title || '•')[0] || '•').toUpperCase();
+  const cover = p.cover
+    ? `<img class="post-card-cover" src="${esc(p.cover)}" loading="lazy" alt="" />`
+    : `<span class="post-card-cover" aria-hidden="true">${initial}</span>`;
+  const meta = `${fmtDate(p.date)}${p.slug ? ' · /' + esc(p.slug) : ''}${p.words != null ? ` · ${p.words} palavras` : ''}`;
+  const detail = p.published
+    ? `<span class="post-card-stats"><span>👁 ${fmtStat(p.views)}</span><span>♥ ${fmtStat(p.likes)}</span><span>💬 ${p.comments ?? '—'}</span>${p.restacks != null ? `<span>🔁 ${p.restacks}</span>` : ''}</span>`
+    : `<span class="post-card-detail">${esc(p.audience || 'everyone')}</span>`;
+  return `<button class="libcard post-card" data-id="${esc(p.id)}">${cover}<span class="post-card-copy"><span class="post-card-title">${esc(p.title || '(sem título)')}</span><span class="post-card-meta">${meta}</span>${detail}</span></button>`;
 }
 const PAGE = 20;
 // Admin archive item -> libCard shape (covers + public stats, no SID needed).
