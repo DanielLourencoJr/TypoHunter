@@ -66,9 +66,9 @@ test("login gate allows the verification tab and keeps access results generic", 
       if (url.pathname === "/api/auth/challenge") return { ok: true, status: 202, json: async () => ({ ok: true, message: genericMessage }) };
       if (url.pathname === "/api/auth/verify") {
         if (!verificationSucceeds) return { ok: false, status: 401, json: async () => ({ error: "invalid or expired code" }) };
-        return { ok: true, status: 200, json: async () => ({ ok: true, pub: "writer.substack.com", expiresAt: Date.now() + 60_000 }) };
+        return { ok: true, status: 200, json: async () => ({ ok: true, pub: "writer.substack.com", landing: "drafts", expiresAt: Date.now() + 60_000 }) };
       }
-      if (url.pathname === "/api/posts") return { ok: true, status: 200, json: async () => ({ totals: { drafts: 2, published: 4 } }) };
+      if (url.pathname === "/api/posts") return { ok: true, status: 200, json: async () => ({ drafts: [], published: [], totals: { drafts: 2, published: 4 } }) };
       throw new Error(`unexpected request: ${url.pathname}`);
     },
     atob: globalThis.atob,
@@ -82,7 +82,10 @@ test("login gate allows the verification tab and keeps access results generic", 
   const context = vm.createContext(sandbox);
   vm.runInContext(appSrc, context, { filename: "public/index.html#auth-ui" });
 
-  const get = (id) => elements.get(id);
+  const get = (id) => {
+    if (!elements.has(id)) elements.set(id, element(id));
+    return elements.get(id);
+  };
   assert.equal(get("auth-tab-code").getAttribute("aria-selected"), "false");
   get("auth-tab-code").onclick();
   assert.equal(get("auth-panel-code").style.display, "");
@@ -97,7 +100,7 @@ test("login gate allows the verification tab and keeps access results generic", 
   await get("auth-next").onclick();
   assert.ok(calls.some((call) => call.path === "/api/auth/challenge"), "setup submits a challenge request");
   const challengeCall = calls.find((call) => call.path === "/api/auth/challenge");
-  assert.deepEqual(JSON.parse(challengeCall.init.body), { pub: "writer.substack.com" });
+  assert.deepEqual(JSON.parse(challengeCall.init.body), { pub: "writer.substack.com", landing: "drafts" });
   assert.equal(get("auth-panel-code").style.display, "");
   assert.match(get("auth-setup-status").textContent, /rascunho temporário/);
 
@@ -111,6 +114,6 @@ test("login gate allows the verification tab and keeps access results generic", 
   assert.equal(vm.runInContext("S.auth.pub", context), "writer.substack.com");
   assert.equal(get("welcome").classList.contains("on"), false, "successful login closes the gate");
   assert.equal(get("main").style.display, "", "successful login reveals the app");
-  assert.equal(get("v-dash").classList.contains("on"), true, "successful login opens the dashboard view");
-  assert.match(get("dash-info").innerHTML, /Acesso confirmado/);
+  assert.equal(get("v-library").classList.contains("on"), true, "direct publication login opens the drafts menu");
+  assert.equal(get("v-dash").classList.contains("on"), false, "direct publication login skips the dashboard");
 });

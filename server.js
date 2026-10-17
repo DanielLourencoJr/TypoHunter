@@ -542,7 +542,7 @@ const server = http.createServer(async (req, res) => {  try {
     if (req.method === "GET" && url.pathname === "/api/auth/session") {
       const session = requestSession(req);
       if (!session) return send(res, 401, { error: "authentication required" });
-      return send(res, 200, { ok: true, pub: session.pub, expiresAt: session.expiresAt });
+      return send(res, 200, { ok: true, pub: session.pub, landing: session.landing || "dashboard", expiresAt: session.expiresAt });
     }
     if (req.method === "POST" && url.pathname === "/api/auth/logout") {
       if (!authRequestAllowed(req)) return send(res, 403, { error: "request rejected" });
@@ -596,6 +596,7 @@ const server = http.createServer(async (req, res) => {  try {
         state.challenges.push({
           draftId: String(created.id), pub, preauthHash,
           codeHash: hashToken(code), expiresAt: now + ttlMs,
+          landing: body.landing === "drafts" ? "drafts" : "dashboard",
           attempts: 0, consumed: false,
         });
         saveAuthState();
@@ -638,7 +639,7 @@ const server = http.createServer(async (req, res) => {  try {
       }
 
       const token = randomBytes(32).toString("base64url");
-      const session = { tokenHash: hashToken(token), pub: challenge.pub, expiresAt: now + SESSION_TTL_MS };
+      const session = { tokenHash: hashToken(token), pub: challenge.pub, landing: challenge.landing || "dashboard", expiresAt: now + SESSION_TTL_MS };
       state.sessions.push(session);
       challenge.consumed = true;
       saveAuthState();
@@ -651,7 +652,7 @@ const server = http.createServer(async (req, res) => {  try {
         cookieHeader(PREAUTH_COOKIE, "", 0),
       );
       scheduleAuthCleanup();
-      return send(res, 200, { ok: true, pub: session.pub, expiresAt: session.expiresAt });
+      return send(res, 200, { ok: true, pub: session.pub, landing: session.landing, expiresAt: session.expiresAt });
     }
 
     // static (never cached: the UI evolves fast during testing)

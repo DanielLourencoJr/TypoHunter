@@ -167,7 +167,7 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   assert.equal((await anonymousConfig.json()).reviewerEmail, "reviewer@example.test", "reviewer email remains available before login");
   const challengeRequest = (cookie = "") => realFetch(`${baseUrl}/api/auth/challenge`, {
     method: "POST", headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
-    body: JSON.stringify({ pub: "e2e-example.substack.com" }),
+    body: JSON.stringify({ pub: "e2e-example.substack.com", landing: "drafts" }),
   });
   const noAccessResponse = await challengeRequest();
   assert.equal(noAccessResponse.status, 202);
@@ -199,9 +199,12 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   assert.equal(verified.status, 200);
   const verifiedBody = await verified.json();
   assert.equal(verifiedBody.pub, "e2e-example.substack.com");
+  assert.equal(verifiedBody.landing, "drafts", "direct publication verification keeps the drafts landing choice");
   sessionCookie = verified.headers.get("set-cookie").split(", ").find((value) => value.startsWith("th_session=")).split(";")[0];
   assert.ok(challengeDeleted, "verification draft is deleted immediately after successful login");
-  assert.equal((await (await realFetch(`${baseUrl}/api/auth/session`, { headers: { Cookie: sessionCookie } })).json()).pub, "e2e-example.substack.com");
+  const activeSession = await (await realFetch(`${baseUrl}/api/auth/session`, { headers: { Cookie: sessionCookie } })).json();
+  assert.equal(activeSession.pub, "e2e-example.substack.com");
+  assert.equal(activeSession.landing, "drafts", "landing choice survives page reload");
 
   challengeDeleted = false;
   const expiringResponse = await challengeRequest();

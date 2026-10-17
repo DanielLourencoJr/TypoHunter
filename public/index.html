@@ -857,6 +857,7 @@ async function requestVerificationDraft() {
     const resolved = await apiFetch('/api/resolve?input=' + encodeURIComponent(input));
     const ref = await resolved.json();
     if (!resolved.ok || ref.error) throw new Error('Não encontramos esse perfil ou publicação. Confira o link e tente novamente.');
+    const landing = ref.kind === 'publication' ? 'drafts' : 'dashboard';
     let pub = ref.host || '';
     if (!pub && ref.handle) {
       const publication = await apiFetch('/api/resolve?input=' + encodeURIComponent(ref.handle + '.substack.com'));
@@ -869,7 +870,7 @@ async function requestVerificationDraft() {
     try { localStorage.setItem('th_ref', JSON.stringify(ref)); } catch {}
     const r = await apiFetch('/api/auth/challenge', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pub }),
+      body: JSON.stringify({ pub, landing }),
     });
     if (!r.ok) throw new Error('Não foi possível iniciar a verificação. Tente novamente.');
     $('auth-setup-status').textContent = 'Seus rascunhos podem conter um rascunho temporário do TypoHunter com o código. O código é necessário na próxima etapa.';
@@ -902,7 +903,12 @@ async function verifyLoginCode() {
     $('logout').style.display = '';
     $('auth-code').value = '';
     setStatus('pronto');
-    await showDash();
+    if (j.landing === 'drafts') {
+      showView('library');
+      await loadLibrary();
+    } else {
+      await showDash();
+    }
   } catch (e) {
     showErr(e.message, 'err-auth-code');
   } finally { $('auth-verify').disabled = false; }
@@ -1540,6 +1546,7 @@ async function boot() {
     $('main').style.display = '';
     $('logout').style.display = '';
     if (location.hash === '#admin') enterAdminRoute();
+    else if (session.landing === 'drafts') { showView('library'); await loadLibrary(); }
     else await showDash();
   } catch { /* stay on the public sign-in screen */ }
 }
