@@ -1,9 +1,10 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { fetchProfileSelf } from "./lib/substack-cli/auth.js";
-import { getDraft, listDrafts, listPublished, updateDraft, publishDraft, translateDraft } from "./lib/substack-cli/drafts.js";
+import { createDraft, deleteDraft, getDraft, listDrafts, listPublished, updateDraft, publishDraft, translateDraft } from "./lib/substack-cli/drafts.js";
 import { draftToMarkdown, tiptapToMarkdown } from "./lib/substack-cli/convert.js";
 import { parseFrontmatter, stringifyFrontmatter } from "./lib/substack-cli/frontmatter.js";
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
@@ -20,6 +21,16 @@ import { htmlToMarkdown } from "./lib/substack-kit/convert/html_to_md.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
 const DATA = path.join(ROOT, "data");
+const PREAUTH_COOKIE = "th_preauth";
+const SESSION_COOKIE = "th_session";
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const MAX_CHALLENGE_ATTEMPTS = 6;
+const CHALLENGE_REPLY = "If the reviewer account has access, a temporary draft contains your verification code. Check your publication’s drafts, then enter the code here.";
+
+let authStateCache;
+let authCleanupTimer;
+let authCleanupRunning = false;
+const challengeRate = new Map();
 
 // Best-effort per-provider daily usage counters (gitignored). Lets the
 // operator see which key is burning and how fast: { date, providers: {...} }.
@@ -74,6 +85,7 @@ function envFresh(key) {
 }
 
 function sidFrom(req) {
+  if (req.authSession) return reviewerSid();
   const h = req.headers["x-substack-sid"];
   if (h) return String(h);
   if (process.env.SUBSTACK_SID) return process.env.SUBSTACK_SID;
@@ -87,6 +99,7 @@ function reviewerSid() {
   return process.env.REVIEWER_SID || process.env.SUBSTACK_SID || "";
 }
 function pubFrom(req, body, query) {
+  if (req.authSession) return req.authSession.pub;
   const h = req.headers["x-pub"];
   if (h) return String(h);
   if (body?.pub) return String(body.pub);
@@ -94,6 +107,139 @@ function pubFrom(req, body, query) {
   // legacy .env fallback (deprecated — UI now picks from /api/me)
   if (process.env.PUB) return process.env.PUB;
   return "";
+}
+
+function authStatePath() {
+  return process.env.AUTH_STATE_PATH || path.join(DATA, "auth-state.json");
+}
+function challengeTtlMs() {
+  const configured = Number(process.env.AUTH_CHALLENGE_TTL_MS);
+  return Number.isFinite(configured) && configured >= 1000 ? configured : 15 * 60 * 1000;
+}
+function authState() {
+  if (authStateCache) return authStateCache;
+  try {
+    const saved = JSON.parse(fs.readFileSync(authStatePath(), "utf8"));
+    authStateCache = {
+      challenges: Array.isArray(saved.challenges) ? saved.challenges : [],
+      sessions: Array.isArray(saved.sessions) ? saved.sessions : [],
+    };
+  } catch {
+    authStateCache = { challenges: [], sessions: [] };
+  }
+  return authStateCache;
+}
+function saveAuthState() {
+  const file = authStatePath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temp = `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify(authState()), { encoding: "utf8", mode: 0o600 });
+  fs.renameSync(temp, file);
+  try { fs.chmodSync(file, 0o600); } catch { /* platform may not support mode changes */ }
+}
+function hashToken(value) {
+  return createHash("sha256").update(String(value)).digest("hex");
+}
+function safeHashEqual(a, b) {
+  if (!/^[a-f0-9]{64}$/.test(a || "") || !/^[a-f0-9]{64}$/.test(b || "")) return false;
+  return timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
+}
+function cookieValue(req, name) {
+  const cookie = String(req.headers.cookie || "");
+  for (const part of cookie.split(";")) {
+    const at = part.indexOf("=");
+    if (at < 0 || part.slice(0, at).trim() !== name) continue;
+    try { return decodeURIComponent(part.slice(at + 1).trim()); }
+    catch { return ""; }
+  }
+  return "";
+}
+function cookieHeader(name, value, maxAge) {
+  const parts = [`${name}=${encodeURIComponent(value)}`, "Path=/", "HttpOnly", "SameSite=Strict", `Max-Age=${maxAge}`];
+  if (process.env.NODE_ENV === "production") parts.push("Secure");
+  return parts.join("; ");
+}
+function appendCookies(res, ...cookies) {
+  const current = res.getHeader("Set-Cookie");
+  res.setHeader("Set-Cookie", [...(Array.isArray(current) ? current : current ? [current] : []), ...cookies]);
+}
+function requestSession(req) {
+  const token = cookieValue(req, SESSION_COOKIE);
+  if (!token) return null;
+  const hash = hashToken(token);
+  const state = authState();
+  const found = state.sessions.find((item) => safeHashEqual(item.tokenHash, hash) && item.expiresAt > Date.now());
+  return found || null;
+}
+function publicationHost(input) {
+  let host = String(input || "").trim().toLowerCase();
+  try {
+    if (/^https?:\/\//i.test(host)) host = new URL(host).host.toLowerCase();
+  } catch { return ""; }
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.substack\.com$/.test(host)) return "";
+  return host;
+}
+function authRequestAllowed(req) {
+  if (String(req.headers["sec-fetch-site"] || "").toLowerCase() === "cross-site") return false;
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try { return new URL(origin).host.toLowerCase() === String(req.headers.host || "").toLowerCase(); }
+  catch { return false; }
+}
+function challengeRateAllowed(req) {
+  const key = req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const recent = (challengeRate.get(key) || []).filter((at) => now - at < 60 * 60 * 1000);
+  if (recent.length >= 5) { challengeRate.set(key, recent); return false; }
+  recent.push(now);
+  challengeRate.set(key, recent);
+  return true;
+}
+function scheduleAuthCleanup(delay = 60 * 1000) {
+  if (authCleanupTimer) clearTimeout(authCleanupTimer);
+  authCleanupTimer = setTimeout(runAuthCleanup, Math.max(0, delay));
+  authCleanupTimer.unref?.();
+}
+async function deleteChallengeDraft(challenge) {
+  const sid = reviewerSid();
+  if (!sid) return false;
+  try {
+    await deleteDraft({ sid, publicationUrl: challenge.pub, id: challenge.draftId });
+    return true;
+  } catch (error) {
+    if (/HTTP (404|410)\b/.test(String(error.message))) return true;
+    return false;
+  }
+}
+async function runAuthCleanup() {
+  if (authCleanupRunning) return;
+  authCleanupRunning = true;
+  try {
+    const state = authState();
+    const now = Date.now();
+    const beforeSessions = state.sessions.length;
+    state.sessions = state.sessions.filter((session) => session.expiresAt > now);
+    let dirty = state.sessions.length !== beforeSessions;
+    for (const challenge of [...state.challenges]) {
+      if (challenge.expiresAt > now && !challenge.consumed) continue;
+      if (await deleteChallengeDraft(challenge)) {
+        const index = state.challenges.indexOf(challenge);
+        if (index >= 0) {
+          state.challenges.splice(index, 1);
+          dirty = true;
+        }
+      }
+    }
+    if (dirty) saveAuthState();
+  } finally {
+    authCleanupRunning = false;
+    const state = authState();
+    const nextExpiry = state.challenges.reduce((next, item) => Math.min(next, item.consumed ? Date.now() : item.expiresAt), Infinity);
+    scheduleAuthCleanup(Number.isFinite(nextExpiry) ? Math.min(Math.max(nextExpiry - Date.now(), 1000), 60 * 1000) : 60 * 1000);
+  }
+}
+function startAuthCleanup() {
+  runAuthCleanup().catch(() => scheduleAuthCleanup());
 }
 
 function pubsFromProfile(profile) {
@@ -393,6 +539,121 @@ async function pumpQueue() {
 
 const server = http.createServer(async (req, res) => {  try {
     const url = new URL(req.url, "http://localhost");
+    if (req.method === "GET" && url.pathname === "/api/auth/session") {
+      const session = requestSession(req);
+      if (!session) return send(res, 401, { error: "authentication required" });
+      return send(res, 200, { ok: true, pub: session.pub, expiresAt: session.expiresAt });
+    }
+    if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+      if (!authRequestAllowed(req)) return send(res, 403, { error: "request rejected" });
+      const token = cookieValue(req, SESSION_COOKIE);
+      const tokenHash = token ? hashToken(token) : "";
+      const state = authState();
+      state.sessions = state.sessions.filter((item) => !safeHashEqual(item.tokenHash, tokenHash));
+      saveAuthState();
+      appendCookies(res,
+        cookieHeader(SESSION_COOKIE, "", 0),
+        cookieHeader(PREAUTH_COOKIE, "", 0),
+      );
+      return send(res, 200, { ok: true });
+    }
+    if (req.method === "POST" && url.pathname === "/api/auth/challenge") {
+      if (!authRequestAllowed(req)) return send(res, 403, { error: "request rejected" });
+      const body = await readJson(req);
+      const pub = publicationHost(body.pub);
+      const ttlMs = challengeTtlMs();
+      let preauth = cookieValue(req, PREAUTH_COOKIE);
+      if (!/^[A-Za-z0-9_-]{40,}$/.test(preauth)) preauth = randomBytes(32).toString("base64url");
+      appendCookies(res, cookieHeader(PREAUTH_COOKIE, preauth, Math.ceil(ttlMs / 1000) + 60));
+      if (!pub || !reviewerSid() || !challengeRateAllowed(req)) {
+        return send(res, 202, { ok: true, message: CHALLENGE_REPLY });
+      }
+
+      let created;
+      try {
+        const sid = reviewerSid();
+        await listDrafts({ sid, publicationUrl: pub, limit: 1 });
+        const code = randomBytes(6).toString("hex").toUpperCase();
+        created = await createDraft({
+          sid,
+          publicationUrl: pub,
+          title: `TypoHunter verification code: ${code}`,
+          subtitle: "Temporary sign-in verification draft. TypoHunter removes this draft automatically.",
+          markdown: "Temporary TypoHunter sign-in verification. This draft will be deleted automatically.",
+          audience: "everyone",
+        });
+        if (!created?.id || !/^\d+$/.test(String(created.id))) throw new Error("verification draft id missing");
+
+        const state = authState();
+        const preauthHash = hashToken(preauth);
+        const now = Date.now();
+        // One active code per browser and publication. Retire an older draft
+        // immediately when possible; expiry cleanup remains the fallback.
+        for (const old of [...state.challenges]) {
+          if (old.pub !== pub || !safeHashEqual(old.preauthHash, preauthHash)) continue;
+          if (await deleteChallengeDraft(old)) state.challenges.splice(state.challenges.indexOf(old), 1);
+        }
+        state.challenges.push({
+          draftId: String(created.id), pub, preauthHash,
+          codeHash: hashToken(code), expiresAt: now + ttlMs,
+          attempts: 0, consumed: false,
+        });
+        saveAuthState();
+        scheduleAuthCleanup(ttlMs);
+      } catch {
+        if (created?.id) await deleteChallengeDraft({ draftId: String(created.id), pub });
+      }
+      // Same response whether or not the reviewer account could see drafts.
+      return send(res, 202, { ok: true, message: CHALLENGE_REPLY });
+    }
+    if (req.method === "POST" && url.pathname === "/api/auth/verify") {
+      if (!authRequestAllowed(req)) return send(res, 403, { error: "request rejected" });
+      const body = await readJson(req);
+      const preauth = cookieValue(req, PREAUTH_COOKIE);
+      const preauthHash = preauth ? hashToken(preauth) : "";
+      const code = String(body.code || "").replace(/[\s-]/g, "").toUpperCase();
+      const codeHash = hashToken(code);
+      const state = authState();
+      const now = Date.now();
+      const challenge = state.challenges.find((item) =>
+        !item.consumed && item.expiresAt > now && item.attempts < MAX_CHALLENGE_ATTEMPTS &&
+        safeHashEqual(item.preauthHash, preauthHash) && safeHashEqual(item.codeHash, codeHash));
+      if (!challenge) {
+        let changed = false;
+        for (const item of state.challenges) {
+          if (!item.consumed && item.expiresAt > now && item.attempts < MAX_CHALLENGE_ATTEMPTS && safeHashEqual(item.preauthHash, preauthHash)) {
+            item.attempts++;
+            changed = true;
+          }
+        }
+        if (changed) saveAuthState();
+        return send(res, 401, { error: "invalid or expired code" });
+      }
+      try {
+        await listDrafts({ sid: reviewerSid(), publicationUrl: challenge.pub, limit: 1 });
+      } catch {
+        challenge.attempts++;
+        saveAuthState();
+        return send(res, 401, { error: "invalid or expired code" });
+      }
+
+      const token = randomBytes(32).toString("base64url");
+      const session = { tokenHash: hashToken(token), pub: challenge.pub, expiresAt: now + SESSION_TTL_MS };
+      state.sessions.push(session);
+      challenge.consumed = true;
+      saveAuthState();
+      if (await deleteChallengeDraft(challenge)) {
+        state.challenges.splice(state.challenges.indexOf(challenge), 1);
+        saveAuthState();
+      }
+      appendCookies(res,
+        cookieHeader(SESSION_COOKIE, token, Math.ceil(SESSION_TTL_MS / 1000)),
+        cookieHeader(PREAUTH_COOKIE, "", 0),
+      );
+      scheduleAuthCleanup();
+      return send(res, 200, { ok: true, pub: session.pub, expiresAt: session.expiresAt });
+    }
+
     // static (never cached: the UI evolves fast during testing)
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
       const f = path.join(ROOT, "public", "index.html");
@@ -401,6 +662,13 @@ const server = http.createServer(async (req, res) => {  try {
       res.end(html);
       return;
     }
+
+    const session = requestSession(req);
+    if (session) req.authSession = session;
+    else if (!(req.method === "GET" && (url.pathname === "/api/config" || url.pathname === "/api/resolve"))) {
+      return send(res, 401, { error: "authentication required" });
+    }
+
     // whoami + publications derived from SID (no need to save PUB)
     if (req.method === "GET" && url.pathname === "/api/me") {
       const sid = sidFrom(req);
@@ -932,6 +1200,11 @@ const server = http.createServer(async (req, res) => {  try {
     return send(res, 500, { error: String(e.message || e).slice(0, 800) });
   }
 });
+server.on("listening", startAuthCleanup);
+server.on("close", () => {
+  if (authCleanupTimer) clearTimeout(authCleanupTimer);
+  authCleanupTimer = null;
+});
 
 // Only bind a port when this file is the process entrypoint. Tests import the
 // module to exercise its pure helpers, and must not open a socket. realpath
@@ -956,6 +1229,7 @@ if (isDirectRun()) {
 
 export {
   recordUsage, loadEnv, envFresh, sidFrom, reviewerSid, pubFrom, pubsFromProfile,
+  authStatePath, runAuthCleanup,
   feedTitle, resolveSubstackRef, publicationRef, send, readJson,
   storePath, loadStore, saveStore, latestMarkdown,
   snapOf, sameSnap, snapOfVersion, editionParam, editionMarkdown,

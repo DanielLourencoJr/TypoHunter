@@ -71,6 +71,16 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 .dialog{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:32px;max-width:520px;box-shadow:var(--dlgshadow);text-align:center}
 .dialog h1{margin:0 0 12px;font-size:24px}
 .dialog p{line-height:1.7;font-size:16px;color:var(--muted)}
+.auth-dialog{max-width:640px;text-align:left;max-height:calc(100vh - 40px);overflow:auto}
+.auth-dialog>p:first-child,.auth-dialog>h1{text-align:center}
+.auth-tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:18px 0 14px}
+.auth-tab{border:0;border-bottom:2px solid transparent;background:transparent;padding:10px 12px;color:var(--muted);font:600 13px var(--font-ui);cursor:pointer}
+.auth-tab.active{color:var(--ink);border-bottom-color:var(--accent)}
+.auth-instructions{background:var(--soft);border-radius:10px;padding:8px 14px;margin:10px 0 16px;color:var(--ink)}
+.auth-instructions ol{margin:0;padding-left:22px}
+.auth-instructions li{padding:5px 0;line-height:1.5}
+.auth-label{display:block;font:600 13px var(--font-ui);margin:14px 0 6px}
+#auth-setup-status{min-height:1.3em}
 /* tutorial mock window */
 .mock{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:10px 0;font-family:var(--font-ui);font-size:13px}
 .mockbar{background:var(--soft);padding:6px 12px;color:var(--muted);border-bottom:1px solid var(--line)}
@@ -325,6 +335,7 @@ a { color: var(--accent); }
   <h1>TypoHunter <small>revisor de rascunhos · só corrige typos, nunca sua voz</small></h1>
   <span id="status" class="pill">pronto</span>
   <span class="spacer"></span>
+  <button id="logout" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition" style="display:none">Sair</button>
   <button id="theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button>
 </div>
 <main id="main" class="narrow" style="display:none">
@@ -462,20 +473,54 @@ a { color: var(--accent); }
 </main>
 
 <div id="welcome">
-  <div class="dialog ring-1 ring-black/5 dark:ring-white/10">
+  <div class="dialog auth-dialog ring-1 ring-black/5 dark:ring-white/10">
     <p class="font-ui text-xs uppercase tracking-widest opacity-60">Substack · revisão de texto</p>
     <h1 class="font-text">TypoHunter</h1>
-    <p>Seus textos do Substack revisados sem copiar e colar: a ferramenta lê seu
-    rascunho, sugere <strong>apenas</strong> correções de typos e gramática —
-    sem mexer na sua voz, estrutura ou imagens — e você aprova cada uma antes
-    de publicar.</p>
-    <button id="w-go" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white text-base px-7 py-3">Continuar</button>
-    <div style="margin-top:14px"><button id="w-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button></div>
+    <div class="auth-tabs" role="tablist" aria-label="Entrar no TypoHunter">
+      <button id="auth-tab-setup" class="auth-tab active" role="tab" aria-selected="true">Adicionar contribuidor</button>
+      <button id="auth-tab-code" class="auth-tab" role="tab" aria-selected="false">Código de verificação</button>
+    </div>
+    <section id="auth-panel-setup" role="tabpanel">
+      <p>Para revisar seus rascunhos, adicione a conta revisora como contribuidora da publicação.</p>
+      <div class="auth-instructions">
+        <ol>
+          <li>No Substack, abra <strong>Settings → Team → Invite</strong>.</li>
+          <li>Convide este e-mail: <strong id="auth-reviewer-email">carregando…</strong></li>
+          <li>Defina o papel como <strong>Contributor</strong> (não Byline). A visibilidade pode ficar Private.</li>
+        </ol>
+      </div>
+      <label class="auth-label" for="auth-ref">Seu perfil ou publicação no Substack</label>
+      <div class="row">
+        <input id="auth-ref" type="text" size="36" placeholder="https://voce.substack.com ou @voce" autocomplete="url" />
+        <button id="auth-next" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Ir para o código</button>
+      </div>
+      <p id="auth-setup-status" class="hint"></p>
+      <div class="err" id="err-auth-setup"></div>
+    </section>
+    <section id="auth-panel-code" role="tabpanel" style="display:none">
+      <p>Abra os rascunhos da publicação. Se o acesso estiver pronto, haverá um rascunho temporário do TypoHunter com o código no título.</p>
+      <label class="auth-label" for="auth-code">Código do título do rascunho</label>
+      <div class="row">
+        <input id="auth-code" type="text" size="24" placeholder="Código de verificação" autocomplete="one-time-code" autocapitalize="characters" />
+        <button id="auth-verify" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Entrar</button>
+      </div>
+      <p class="hint">A resposta será a mesma se o código estiver incorreto, expirado ou se o rascunho ainda não estiver disponível.</p>
+      <div class="err" id="err-auth-code"></div>
+    </section>
+    <div style="margin-top:14px"><button id="auth-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button></div>
   </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
+const networkFetch = (globalThis.fetch || (() => Promise.reject(new Error('fetch unavailable')))).bind(globalThis);
+async function apiFetch(input, init) {
+  const response = await networkFetch(input, init);
+  let pathname = '';
+  try { pathname = new URL(typeof input === 'string' ? input : input.url, location.href || 'http://localhost').pathname; } catch {}
+  if (response.status === 401 && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && S.auth) expireLogin();
+  return response;
+}
 const statusEl = $('status');
 function currentTheme() { return document.documentElement.classList.contains('dark') ? 'dark' : 'light'; }
 function paintThemeBtn() {
@@ -490,12 +535,12 @@ function toggleTheme() {
   try { localStorage.setItem('th_theme', next); } catch {}
   paintThemeBtn();
 }
-const S = { ref: null, pub: '', posts: null, cur: null, decisions: {}, groupDeselect: new Set(), editorUrl: null, isPublished: false, lastApplied: 0, admin: null };
+const S = { ref: null, pub: '', auth: null, posts: null, cur: null, decisions: {}, groupDeselect: new Set(), editorUrl: null, isPublished: false, lastApplied: 0, admin: null };
 function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = 'pill' + (cls ? ' ' + cls : ''); }
 function showErr(m, where) { const el = $(where); if (el) { el.style.display = 'block'; el.textContent = m; } setStatus('erro', 'err'); }
 function clearErrs() { document.querySelectorAll('.err').forEach(e => { e.style.display = 'none'; e.textContent = ''; }); }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function H() { const h = {}; if (S.pub) { h['x-pub'] = S.pub; localStorage.setItem('th_pub', S.pub); } return h; }
+function H() { const h = {}; if (S.pub) { h['x-pub'] = S.pub; try { localStorage.setItem('th_pub', S.pub); } catch {} } return h; }
 function EQ() { return `?edition=${encodeURIComponent((S.cur && S.cur.edition) || 'original')}`; }
 function showView(name, push) {
   if (push !== false && CUR && CUR !== name) NAV.push(CUR);
@@ -767,8 +812,114 @@ function embedBlocks(bodyMd, placements) {
   return html.replace(/\u0000DIF(\d+)\u0000/g, (m, n) => htmlBlocks[Number(n)] ?? m);
 }
 
-/* ---------- onboarding ---------- */
-$('w-go').onclick = () => { S.admin = null; $('welcome').classList.remove('on'); document.body.classList.remove('bare'); bootProfile(); };
+/* ---------- sign-in and contributor setup ---------- */
+function setAuthTab(tab) {
+  const setup = tab === 'setup';
+  $('auth-panel-setup').style.display = setup ? '' : 'none';
+  $('auth-panel-code').style.display = setup ? 'none' : '';
+  $('auth-tab-setup').classList.toggle('active', setup);
+  $('auth-tab-code').classList.toggle('active', !setup);
+  $('auth-tab-setup').setAttribute('aria-selected', setup ? 'true' : 'false');
+  $('auth-tab-code').setAttribute('aria-selected', setup ? 'false' : 'true');
+}
+function showLoginGate() {
+  S.auth = null;
+  S.admin = null;
+  $('welcome').classList.add('on');
+  $('topbar').style.display = 'none';
+  $('main').style.display = 'none';
+  $('logout').style.display = 'none';
+  document.body.classList.add('bare');
+  setAuthTab('setup');
+}
+function expireLogin() {
+  S.auth = null;
+  S.pub = '';
+  S.cur = null;
+  showLoginGate();
+}
+async function loadAuthConfig() {
+  try {
+    const r = await apiFetch('/api/config');
+    const j = await r.json();
+    $('auth-reviewer-email').textContent = j.reviewerEmail || '(e-mail da conta revisora — peça ao responsável pelo serviço)';
+  } catch {
+    $('auth-reviewer-email').textContent = '(e-mail da conta revisora indisponível)';
+  }
+}
+async function requestVerificationDraft() {
+  clearErrs();
+  const input = $('auth-ref').value.trim();
+  if (!input) { showErr('Informe o link do seu perfil ou publicação no Substack.', 'err-auth-setup'); return; }
+  $('auth-next').disabled = true;
+  $('auth-setup-status').textContent = 'Preparando a verificação…';
+  try {
+    const resolved = await apiFetch('/api/resolve?input=' + encodeURIComponent(input));
+    const ref = await resolved.json();
+    if (!resolved.ok || ref.error) throw new Error('Não encontramos esse perfil ou publicação. Confira o link e tente novamente.');
+    let pub = ref.host || '';
+    if (!pub && ref.handle) {
+      const publication = await apiFetch('/api/resolve?input=' + encodeURIComponent(ref.handle + '.substack.com'));
+      const result = await publication.json();
+      if (publication.ok && result.kind === 'publication') { pub = result.host; Object.assign(ref, result); }
+    }
+    if (!pub) throw new Error('Informe o link de uma publicação do Substack para continuar.');
+    S.ref = ref;
+    S.pub = pub;
+    try { localStorage.setItem('th_ref', JSON.stringify(ref)); } catch {}
+    const r = await apiFetch('/api/auth/challenge', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pub }),
+    });
+    if (!r.ok) throw new Error('Não foi possível iniciar a verificação. Tente novamente.');
+    $('auth-setup-status').textContent = 'Seus rascunhos podem conter um rascunho temporário do TypoHunter com o código. O código é necessário na próxima etapa.';
+    setAuthTab('code');
+    $('auth-code').focus();
+  } catch (e) {
+    showErr(e.message, 'err-auth-setup');
+    $('auth-setup-status').textContent = '';
+  } finally { $('auth-next').disabled = false; }
+}
+async function verifyLoginCode() {
+  clearErrs();
+  const code = $('auth-code').value.trim();
+  $('auth-verify').disabled = true;
+  try {
+    const r = await apiFetch('/api/auth/verify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error('Código inválido ou expirado. Confira o título do rascunho e tente novamente.');
+    S.auth = j;
+    S.pub = j.pub;
+    if (!S.ref || S.ref.host !== j.pub) S.ref = { kind: 'publication', host: j.pub, handle: j.pub.split('.')[0], name: j.pub };
+    try { localStorage.setItem('th_ref', JSON.stringify(S.ref)); } catch {}
+    $('welcome').classList.remove('on');
+    document.body.classList.remove('bare');
+    $('topbar').style.display = '';
+    $('main').style.display = '';
+    $('logout').style.display = '';
+    $('auth-code').value = '';
+    setStatus('pronto');
+    await showDash();
+  } catch (e) {
+    showErr(e.message, 'err-auth-code');
+  } finally { $('auth-verify').disabled = false; }
+}
+$('auth-tab-setup').onclick = () => setAuthTab('setup');
+$('auth-tab-code').onclick = () => setAuthTab('code');
+$('auth-next').onclick = requestVerificationDraft;
+$('auth-ref').addEventListener('keydown', (e) => { if (e.key === 'Enter') requestVerificationDraft(); });
+$('auth-verify').onclick = verifyLoginCode;
+$('auth-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyLoginCode(); });
+$('auth-theme').onclick = toggleTheme;
+$('logout').onclick = async () => {
+  try { await apiFetch('/api/auth/logout', { method: 'POST' }); } catch {}
+  expireLogin();
+};
+
+/* ---------- legacy profile onboarding helpers ---------- */
 function bootProfile() {
   const saved = localStorage.getItem('th_ref');
   if (saved) {
@@ -789,7 +940,7 @@ async function submitRef() {
   setStatus('verificando…', 'busy');
   $('refgo').disabled = true;
   try {
-    const r = await fetch('/api/resolve?input=' + encodeURIComponent(input));
+    const r = await apiFetch('/api/resolve?input=' + encodeURIComponent(input));
     const j = await r.json();
     if (j.error) throw new Error(j.error + ' — confira o link e tente de novo.');
     S.ref = j;
@@ -803,7 +954,7 @@ async function enterWithRef(ref) {
   let pub = ref.host || '';
   if (!pub && ref.handle) {
     try {
-      const r = await fetch('/api/resolve?input=' + encodeURIComponent(ref.handle + '.substack.com'));
+      const r = await apiFetch('/api/resolve?input=' + encodeURIComponent(ref.handle + '.substack.com'));
       const j = await r.json();
       if (!j.error) { pub = j.host; S.ref = j; localStorage.setItem('th_ref', JSON.stringify(j)); }
     } catch { /* segue sem pub: mostra tutorial genérico */ }
@@ -812,7 +963,7 @@ async function enterWithRef(ref) {
   if (!pub) { showView('tutorial'); fillTutorial(null); return; }
   setStatus('verificando acesso…', 'busy');
   try {
-    const r = await fetch('/api/access?pub=' + encodeURIComponent(pub));
+    const r = await apiFetch('/api/access?pub=' + encodeURIComponent(pub));
     const j = await r.json();
     S.accessCheckedAs = j.checkedAs || '';
     if (j.hasAccess) showDash();
@@ -823,7 +974,7 @@ async function enterWithRef(ref) {
 let CFG = { supportEmail: '', reviewerEmail: '' };
 async function fillTutorial(pub) {
   try {
-    const r = await fetch('/api/config');
+    const r = await apiFetch('/api/config');
     CFG = await r.json();
   } catch { /* opcional */ }
   $('tut-mail').textContent = CFG.reviewerEmail || '(e-mail da conta revisora — peça ao responsável pelo serviço)';
@@ -838,7 +989,7 @@ $('tut-check').onclick = async () => {
   $('tut-check').disabled = true;
   $('tut-status').textContent = 'Verificando…';
   try {
-    const r = await fetch('/api/access?pub=' + encodeURIComponent(S.pub));
+    const r = await apiFetch('/api/access?pub=' + encodeURIComponent(S.pub));
     const j = await r.json();
     S.accessCheckedAs = j.checkedAs || '';
     if (j.hasAccess) showDash();
@@ -853,7 +1004,7 @@ async function showDash() {
   const ref = S.ref || {};
   let counts = '';
   try {
-    const r = await fetch('/api/posts?limit=1', { headers: H() });
+    const r = await apiFetch('/api/posts?limit=1', { headers: H() });
     const j = await r.json();
     if (!j.error && j.totals) {
       const t = j.totals;
@@ -890,7 +1041,7 @@ async function loadAdminMore() {
   try {
     ADM_OFFSET += ADM_PAGE;
     const input = $('adm-pub').value.trim();
-    const r = await fetch(`/api/admin/archive?pub=${encodeURIComponent(input)}&limit=${ADM_PAGE}&offset=${ADM_OFFSET}`, { headers: AH() });
+    const r = await apiFetch(`/api/admin/archive?pub=${encodeURIComponent(input)}&limit=${ADM_PAGE}&offset=${ADM_OFFSET}`, { headers: AH() });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     S.posts.published.push(...j.posts.map(admCard));
@@ -902,7 +1053,7 @@ async function loadAdminMore() {
 async function loadLibrary() {  clearErrs(); setStatus('carregando textos…', 'busy');
   S.postsOffset = 0;
   try {
-    const r = await fetch(`/api/posts?limit=${PAGE}&offset=0`, { headers: H() });
+    const r = await apiFetch(`/api/posts?limit=${PAGE}&offset=0`, { headers: H() });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     S.posts = j;
@@ -950,7 +1101,7 @@ $('more').onclick = async () => {
   btn.disabled = true;
   try {
     S.postsOffset += PAGE;
-    const r = await fetch(`/api/posts?limit=${PAGE}&offset=${S.postsOffset}`, { headers: H() });
+    const r = await apiFetch(`/api/posts?limit=${PAGE}&offset=${S.postsOffset}`, { headers: H() });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     S.posts.drafts.push(...(j.drafts || []));
@@ -996,7 +1147,7 @@ async function openHistory(id, edition, adminHost) {
   showView('history');
   setStatus('abrindo…', 'busy');
   try {
-    const r = await fetch(`/api/posts/${id}?edition=${encodeURIComponent(S.cur.edition)}`, { headers: H() });
+    const r = await apiFetch(`/api/posts/${id}?edition=${encodeURIComponent(S.cur.edition)}`, { headers: H() });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     S.cur.store = j.store;
@@ -1045,9 +1196,9 @@ async function analyzeInBackground() {
   const adm = cur.readonly && cur.admin;
   try {
     const r = adm
-      ? await fetch('/api/admin/analyze',
+      ? await apiFetch('/api/admin/analyze',
         { method: 'POST', headers: { ...AH(), 'Content-Type': 'application/json' }, body: JSON.stringify({ pub: cur.admin.host, slug: cur.admin.slug }) })
-      : await fetch(`/api/posts/${cur.id}/proofread?edition=${encodeURIComponent(cur.edition)}`,
+      : await apiFetch(`/api/posts/${cur.id}/proofread?edition=${encodeURIComponent(cur.edition)}`,
         { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ language: cur.lang }) });
     const j = await r.json();
     if (cur !== S.cur) return; // usuário trocou de texto no meio
@@ -1070,7 +1221,7 @@ async function pollAnalysisJob(cur, jobId, adm) {
     if (cur !== S.cur) return;
     let j;
     try {
-      const r = await fetch('/api/jobs/' + jobId, { headers: adm ? AH() : H() });
+      const r = await apiFetch('/api/jobs/' + jobId, { headers: adm ? AH() : H() });
       j = await r.json();
     } catch { continue; }
     if (cur !== S.cur) return;
@@ -1269,7 +1420,7 @@ async function finishReview(mode) {
   setStatus('aplicando…', 'busy');
   try {
     if (ids.length) {
-      const r = await fetch(`/api/posts/${S.cur.id}/apply?edition=${encodeURIComponent(S.cur.edition)}`,
+      const r = await apiFetch(`/api/posts/${S.cur.id}/apply?edition=${encodeURIComponent(S.cur.edition)}`,
         { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify({ acceptedIds: ids }) });
       const j = await r.json();
       if (j.error) throw new Error(j.error);
@@ -1302,7 +1453,7 @@ $('done-push').onclick = async () => {
   try {
     const body = { version: S.lastApplied };
     if (S.cur.isPublished) body.republish = true;
-    const r = await fetch(`/api/posts/${S.cur.id}/push?edition=${encodeURIComponent(S.cur.edition)}`,
+    const r = await apiFetch(`/api/posts/${S.cur.id}/push?edition=${encodeURIComponent(S.cur.edition)}`,
       { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
@@ -1325,7 +1476,7 @@ $('adm-go').onclick = async () => {
   const password = $('adm-pass').value;
   if (!password) return;
   try {
-    const r = await fetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+    const r = await apiFetch('/api/admin/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     S.admin = { key: password };
@@ -1352,7 +1503,7 @@ $('adm-list').onclick = async () => {
   if (pm) { openHistory('adm:' + pm[2], null, pm[1]); return; }
   $('adm-status').textContent = 'Buscando posts…';
   try {
-    const r = await fetch(`/api/admin/archive?pub=${encodeURIComponent(input)}&limit=${ADM_PAGE}&offset=0`, { headers: AH() });
+    const r = await apiFetch(`/api/admin/archive?pub=${encodeURIComponent(input)}&limit=${ADM_PAGE}&offset=0`, { headers: AH() });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     ADM_HOST = j.host;
@@ -1371,17 +1522,33 @@ $('adm-list').onclick = async () => {
 
 /* ---------- boot ---------- */
 $('theme').onclick = toggleTheme;
-$('w-theme').onclick = toggleTheme;
 paintThemeBtn();
-(function boot() {
-  if (location.hash === '#admin') { enterAdminRoute(); return; }
-  document.body.classList.add('bare');
-  $('welcome').classList.add('on');
-})();
+async function boot() {
+  showLoginGate();
+  await loadAuthConfig();
+  try {
+    const r = await apiFetch('/api/auth/session');
+    if (!r.ok) return;
+    const session = await r.json();
+    S.auth = session;
+    S.pub = session.pub;
+    try { S.ref = JSON.parse(localStorage.getItem('th_ref') || 'null'); } catch { S.ref = null; }
+    if (!S.ref || S.ref.host !== session.pub) S.ref = { kind: 'publication', host: session.pub, handle: session.pub.split('.')[0], name: session.pub };
+    $('welcome').classList.remove('on');
+    document.body.classList.remove('bare');
+    $('topbar').style.display = '';
+    $('main').style.display = '';
+    $('logout').style.display = '';
+    if (location.hash === '#admin') enterAdminRoute();
+    else await showDash();
+  } catch { /* stay on the public sign-in screen */ }
+}
+boot();
 // Same-document navigation (typing the URL in an open tab) doesn't reload,
 // so route hash changes explicitly.
 window.addEventListener('hashchange', () => {
-  if (location.hash === '#admin') enterAdminRoute();
+  if (location.hash === '#admin' && S.auth) enterAdminRoute();
+  else if (location.hash === '#admin') showLoginGate();
 });
 function enterAdminRoute() {
   // Hidden route (no button): password gate, then the standard screens.

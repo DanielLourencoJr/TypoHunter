@@ -60,6 +60,11 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   editing correct prose — hence not the default.
   `REVIEWER_SID` is the service (contributor-model) identity; central vault keeps
   `SUBSTACK_SID_REVIEWER` + `SUBSTACK_USERID_REVIEWER` + `SUBSTACK_HANDLE_REVIEWER`.
+  `REVIEWER_EMAIL` is public setup guidance shown by the login gate. Auth
+  challenges and sessions are stored in `data/auth-state.json` (or
+  `AUTH_STATE_PATH`); hosted deployments must point this at persistent storage.
+  Verification drafts expire after 15 minutes and are removed on successful
+  verification or by the cleanup loop after expiry. Sessions last 12 hours.
   Experiments use the TEST account: `/mnt/HD/Junior/Projects/.substack.test.env`
   (pub `danielloureno.substack.com`). MAIN (`danielloureno1`) is LIVE — read-only
   probes only, and never echo secret values into tool output (they land in logs).

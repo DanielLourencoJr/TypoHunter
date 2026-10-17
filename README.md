@@ -24,9 +24,29 @@ runtime dependencies (nodemon is dev-only) and no build step. Node.js 18+.
 | `GROQ_API_KEY` | Groq API key for proofreading. Without it, a heuristic demo mode runs |
 | `GROQ_MODEL`   | Defaults to `openai/gpt-oss-120b`                    |
 | `PORT`         | Defaults to `5179`                                   |
+| `REVIEWER_SID` | Optional service account used to verify contributor access and create/remove temporary code drafts; falls back to `SUBSTACK_SID` |
+| `REVIEWER_EMAIL` | Email shown in the contributor setup instructions |
+| `SUPPORT_EMAIL` | Optional support contact shown in setup instructions |
+| `AUTH_STATE_PATH` | Optional durable path for login challenges and sessions; defaults to `data/auth-state.json` |
 
 How to get `SUBSTACK_SID`: browser DevTools → Application/Storage → Cookies →
 copy the `substack.sid` value while logged into Substack.
+
+### Login gate
+
+Users enter their Substack publication and can follow the in-app instructions to
+invite the reviewer email as a **Contributor**. The next tab is available either
+way. When the reviewer account has publication access, TypoHunter creates a
+temporary draft whose title contains a short verification code. The user enters
+that code to start a 12-hour session for that publication. The code draft is
+deleted on successful sign-in and after its 15-minute expiry. If the reviewer
+account cannot access the publication, no code draft is created and the site
+shows the same generic code error.
+
+For a hosted deployment, configure `REVIEWER_SID` and `REVIEWER_EMAIL`, and put
+`AUTH_STATE_PATH` on persistent storage so active sessions and pending draft
+cleanup survive restarts. The reviewer account needs contributor access to each
+publication it serves.
 
 ## Workflow
 
