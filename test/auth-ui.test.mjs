@@ -112,8 +112,21 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.equal(get("welcome-auth").style.display, "");
   assert.notEqual(get("auth-panel-setup").style.display, "none", "contributor setup is the first step");
   assert.notEqual(get("auth-panel-code").style.display, "none", "verification follows setup on the same page");
+  assert.equal(get("welcome-auth").classList.contains("show-code"), false, "setup card is active first");
+  assert.equal(get("auth-screen-setup").getAttribute("aria-hidden"), "false");
+  assert.equal(get("auth-screen-code").getAttribute("aria-hidden"), "true");
+  assert.equal(get("auth-screen-setup").inert, false);
+  assert.equal(get("auth-screen-code").inert, true, "hidden card controls cannot receive keyboard focus");
   assert.ok(html.indexOf('id="auth-panel-setup"') < html.indexOf('id="auth-panel-code"'), "setup appears before verification");
+  assert.ok(html.indexOf('id="auth-screen-setup"') < html.indexOf('id="auth-screen-code"'), "setup screen precedes code screen");
   assert.doesNotMatch(html, /auth-tab|role="tablist"/, "the login flow has no tabs");
+  assert.match(html, /\.auth-flow\{[^}]*overflow:hidden/s, "the stage clips page scrolling");
+  assert.match(html, /\.auth-screen\{[^}]*height:100%/s, "each screen fills the viewport stage");
+  assert.match(html, /\.auth-dialog\{[^}]*height:100%/s, "each card fills its screen vertically");
+  assert.match(html, /#auth-screen-code\{transform:translateY\(100%\)/, "the code card starts one full screen below setup");
+  assert.match(html, /#welcome-auth\.show-code #auth-screen-setup\{transform:translateY\(-100%\)/, "the transition moves the entire setup card away");
+  assert.match(html, /#welcome-auth\.show-code #auth-screen-code\{transform:translateY\(0\)/, "the transition brings the code card into place");
+  assert.match(html, /body\.bare\{overflow:hidden\}/, "the document cannot scroll behind the cards");
   for (let attempt = 0; attempt < 20 && get("auth-reviewer-email")?.textContent !== "reviewer@example.test"; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
@@ -124,8 +137,15 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.ok(calls.some((call) => call.path === "/api/auth/challenge"), "setup submits a challenge request");
   const challengeCall = calls.find((call) => call.path === "/api/auth/challenge");
   assert.deepEqual(JSON.parse(challengeCall.init.body), { pub: "writer.substack.com", landing: "drafts" });
-  assert.notEqual(get("auth-panel-code").style.display, "none");
+  assert.equal(get("welcome-auth").classList.contains("show-code"), true, "a successful challenge advances to the code card");
+  assert.equal(get("auth-screen-setup").getAttribute("aria-hidden"), "true");
+  assert.equal(get("auth-screen-code").getAttribute("aria-hidden"), "false");
+  assert.equal(get("auth-screen-setup").inert, true);
+  assert.equal(get("auth-screen-code").inert, false);
   assert.match(get("auth-setup-status").textContent, /rascunho temporário/);
+  get("auth-prev-step").onclick();
+  assert.equal(get("welcome-auth").classList.contains("show-code"), false, "the back control restores the setup card");
+  vm.runInContext("focusVerificationStep()", context);
 
   get("auth-code").value = "wrong-code";
   await get("auth-verify").onclick();

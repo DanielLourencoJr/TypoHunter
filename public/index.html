@@ -47,6 +47,7 @@ tailwind.config = {
 *{box-sizing:border-box}
 body{font-family:var(--font-text);background:var(--bg);color:var(--ink);margin:0;padding:0 16px 64px}
 body.bare{padding:0}
+body.bare{overflow:hidden}
 .topbar{max-width:1080px;margin:0 auto;padding:20px 0 8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .topbar h1{font-size:22px;margin:0;font-family:var(--font-ui);font-weight:800;letter-spacing:-.01em}
 .topbar h1 small{font-family:var(--font-ui);font-size:12px;color:var(--muted);font-weight:400}
@@ -71,7 +72,16 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 .dialog{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:32px;max-width:520px;box-shadow:var(--dlgshadow);text-align:center}
 .dialog h1{margin:0 0 12px;font-size:24px}
 .dialog p{line-height:1.7;font-size:16px;color:var(--muted)}
-.auth-dialog{max-width:620px;text-align:left;max-height:calc(100vh - 40px);overflow:auto;padding:30px 34px}
+.auth-flow{position:fixed;inset:0;z-index:11;display:grid;grid-template-areas:"step";overflow:hidden;overscroll-behavior:none;background:var(--bg)}
+.auth-screen{grid-area:step;display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-width:0;min-height:0;padding:clamp(12px,2.5vh,24px);overflow:hidden;transition:transform .5s cubic-bezier(.22,.75,.25,1)}
+#auth-screen-setup{transform:translateY(0);z-index:2}
+#auth-screen-code{transform:translateY(100%);z-index:1}
+#welcome-auth.show-code #auth-screen-setup{transform:translateY(-100%);pointer-events:none}
+#welcome-auth.show-code #auth-screen-code{transform:translateY(0);z-index:3}
+.auth-dialog{width:min(620px,100%);height:100%;max-height:100%;min-height:0;overflow:auto;overscroll-behavior:contain;padding:clamp(20px,4vh,34px) clamp(18px,4vw,34px);text-align:left;display:flex;flex-direction:column;justify-content:center}
+@media (max-height:760px){.auth-dialog{justify-content:flex-start}}
+@media (max-width:520px){.auth-screen{padding:8px}.auth-dialog{padding:22px 18px;border-radius:14px}.auth-form-row{flex-wrap:wrap}.auth-form-row input,.auth-form-row button{width:100%}}
+@media (prefers-reduced-motion:reduce){.auth-screen{transition:none}}
 .auth-dialog>p:first-child,.auth-dialog>h1{text-align:center}
 .welcome-intro{max-width:560px;text-align:center}
 .welcome-intro p{max-width:500px;margin:16px auto 22px}
@@ -494,48 +504,64 @@ a { color: var(--accent); }
     <button id="welcome-start" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white text-base px-7 py-3">Começar</button>
     <div style="margin-top:14px"><button id="w-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button></div>
   </div>
-  <div class="dialog auth-dialog ring-1 ring-black/5 dark:ring-white/10" id="welcome-auth" style="display:none">
-    <p class="font-ui text-xs uppercase tracking-widest opacity-60">Substack · revisão de texto</p>
-    <h1 class="font-text">TypoHunter</h1>
-    <section class="auth-step" id="auth-panel-setup" aria-labelledby="auth-setup-title">
-      <div class="auth-step-heading"><span class="auth-step-number">1</span><h2 id="auth-setup-title">Adicione a conta revisora</h2></div>
-      <p class="hint">Convide a conta como contribuidora da publicação para permitir a leitura dos rascunhos.</p>
-      <div class="auth-instructions">
-        <ol>
-          <li>No Substack, abra <strong>Settings → Team → Invite</strong>.</li>
-          <li>Convide este e-mail: <strong id="auth-reviewer-email">carregando…</strong></li>
-          <li>Defina o papel como <strong>Contributor</strong> (não Byline). A visibilidade pode ficar Private.</li>
-        </ol>
+  <div class="auth-flow" id="welcome-auth" style="display:none">
+    <section class="auth-screen" id="auth-screen-setup" aria-label="Etapa 1: adicionar contribuidor">
+      <div class="dialog auth-dialog ring-1 ring-black/5 dark:ring-white/10">
+        <p class="font-ui text-xs uppercase tracking-widest opacity-60">Substack · revisão de texto</p>
+        <h1 class="font-text">TypoHunter</h1>
+        <section class="auth-step" id="auth-panel-setup" aria-labelledby="auth-setup-title">
+          <div class="auth-step-heading"><span class="auth-step-number">1</span><h2 id="auth-setup-title">Adicione a conta revisora</h2></div>
+          <p class="hint">Convide a conta como contribuidora da publicação para permitir a leitura dos rascunhos.</p>
+          <div class="auth-instructions">
+            <ol>
+              <li>No Substack, abra <strong>Settings → Team → Invite</strong>.</li>
+              <li>Convide este e-mail: <strong id="auth-reviewer-email">carregando…</strong></li>
+              <li>Defina o papel como <strong>Contributor</strong> (não Byline). A visibilidade pode ficar Private.</li>
+            </ol>
+          </div>
+          <label class="auth-label" for="auth-ref">Seu perfil ou publicação no Substack</label>
+          <div class="auth-form-row">
+            <input id="auth-ref" type="text" placeholder="https://voce.substack.com ou @voce" autocomplete="url" />
+            <button id="auth-next" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Solicitar código</button>
+          </div>
+          <div id="auth-profile-picker" style="display:none;margin-top:12px">
+            <label class="auth-label" for="auth-profile-pub">Publicações deste perfil</label>
+            <select id="auth-profile-pub" style="width:100%"></select>
+            <p class="hint">Cada publicação exige seu próprio código de verificação.</p>
+          </div>
+          <p id="auth-setup-status" class="hint"></p>
+          <div class="err" id="err-auth-setup"></div>
+        </section>
+        <div class="auth-footer">
+          <button id="auth-back" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">← Voltar</button>
+          <span class="spacer"></span>
+          <button id="auth-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button>
+        </div>
       </div>
-      <label class="auth-label" for="auth-ref">Seu perfil ou publicação no Substack</label>
-      <div class="auth-form-row">
-        <input id="auth-ref" type="text" placeholder="https://voce.substack.com ou @voce" autocomplete="url" />
-        <button id="auth-next" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Solicitar código</button>
-      </div>
-      <div id="auth-profile-picker" style="display:none;margin-top:12px">
-        <label class="auth-label" for="auth-profile-pub">Publicações deste perfil</label>
-        <select id="auth-profile-pub" style="width:100%"></select>
-        <p class="hint">Cada publicação exige seu próprio código de verificação.</p>
-      </div>
-      <p id="auth-setup-status" class="hint"></p>
-      <div class="err" id="err-auth-setup"></div>
     </section>
-    <section class="auth-step" id="auth-panel-code" aria-labelledby="auth-code-title">
-      <div class="auth-step-heading"><span class="auth-step-number">2</span><h2 id="auth-code-title">Digite o código de verificação</h2></div>
-      <p class="hint">Abra os rascunhos da publicação. Se o acesso estiver pronto, haverá um rascunho temporário do TypoHunter com o código no título.</p>
-      <label class="auth-label" for="auth-code">Código do título do rascunho</label>
-      <div class="auth-form-row">
-        <input id="auth-code" type="text" placeholder="Código de verificação" autocomplete="one-time-code" autocapitalize="characters" />
-        <button id="auth-verify" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Entrar</button>
+    <section class="auth-screen" id="auth-screen-code" aria-label="Etapa 2: inserir código" aria-hidden="true" inert>
+      <div class="dialog auth-dialog ring-1 ring-black/5 dark:ring-white/10">
+        <p class="font-ui text-xs uppercase tracking-widest opacity-60">Substack · revisão de texto</p>
+        <h1 class="font-text">TypoHunter</h1>
+        <section class="auth-step" id="auth-panel-code" aria-labelledby="auth-code-title">
+          <div class="auth-step-heading"><span class="auth-step-number">2</span><h2 id="auth-code-title">Digite o código de verificação</h2></div>
+          <p class="hint">Abra os rascunhos da publicação. Se o acesso estiver pronto, haverá um rascunho temporário do TypoHunter com o código no título.</p>
+          <label class="auth-label" for="auth-code">Código do título do rascunho</label>
+          <div class="auth-form-row">
+            <input id="auth-code" type="text" placeholder="Código de verificação" autocomplete="one-time-code" autocapitalize="characters" />
+            <button id="auth-verify" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Entrar</button>
+          </div>
+          <p class="hint">A resposta será a mesma se o código estiver incorreto, expirado ou se o rascunho ainda não estiver disponível.</p>
+          <div class="err" id="err-auth-code"></div>
+        </section>
+        <div class="auth-footer">
+          <button id="auth-prev-step" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">← Voltar à etapa 1</button>
+          <button id="auth-cancel" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition" style="display:none">Voltar à seleção</button>
+          <span class="spacer"></span>
+          <button id="auth-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button>
+        </div>
       </div>
-      <p class="hint">A resposta será a mesma se o código estiver incorreto, expirado ou se o rascunho ainda não estiver disponível.</p>
-      <div class="err" id="err-auth-code"></div>
     </section>
-    <div class="auth-footer">
-      <button id="auth-back" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">← Voltar</button>
-      <button id="auth-cancel" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition" style="display:none">Voltar à seleção</button>
-      <span class="spacer"></span>
-      <button id="auth-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button>
     </div>
   </div>
 </div>
@@ -843,8 +869,19 @@ function embedBlocks(bodyMd, placements) {
 
 /* ---------- sign-in and contributor setup ---------- */
 function focusVerificationStep() {
-  $('auth-panel-code').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  $('auth-code').focus();
+  $('welcome-auth').classList.add('show-code');
+  $('auth-screen-setup').setAttribute('aria-hidden', 'true');
+  $('auth-screen-code').setAttribute('aria-hidden', 'false');
+  $('auth-screen-setup').inert = true;
+  $('auth-screen-code').inert = false;
+  $('auth-code').focus({ preventScroll: true });
+}
+function focusSetupStep() {
+  $('welcome-auth').classList.remove('show-code');
+  $('auth-screen-setup').setAttribute('aria-hidden', 'false');
+  $('auth-screen-code').setAttribute('aria-hidden', 'true');
+  $('auth-screen-setup').inert = false;
+  $('auth-screen-code').inert = true;
 }
 function showLoginGate() {
   S.auth = null;
@@ -855,12 +892,14 @@ function showLoginGate() {
   $('logout').style.display = 'none';
   $('welcome-intro').style.display = S.returningAuth ? 'none' : '';
   $('welcome-auth').style.display = S.returningAuth ? '' : 'none';
+  focusSetupStep();
   $('auth-cancel').style.display = S.returningAuth ? '' : 'none';
   document.body.classList.add('bare');
 }
 function showAuthGate() {
   $('welcome-intro').style.display = 'none';
   $('welcome-auth').style.display = '';
+  focusSetupStep();
   $('auth-ref').focus();
 }
 function expireLogin() {
@@ -983,6 +1022,7 @@ $('auth-back').onclick = () => {
   $('welcome-auth').style.display = 'none';
   $('welcome-intro').style.display = '';
 };
+$('auth-prev-step').onclick = focusSetupStep;
 $('w-theme').onclick = toggleTheme;
 $('auth-next').onclick = requestVerificationDraft;
 $('auth-ref').addEventListener('keydown', (e) => { if (e.key === 'Enter') requestVerificationDraft(); });
