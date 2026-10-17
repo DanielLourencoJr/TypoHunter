@@ -1701,10 +1701,10 @@ async function finishReview(mode) {
       : `${acc} aceitas aplicadas · ${sugs.length - acc} rejeitadas/ignoradas descartadas.`;
     $('done-editor').href = S.cur.editorUrl || '#';
     const upd = $('done-push');
-    upd.textContent = S.cur.isPublished ? 'Atualizar o post publicado' : 'Atualizar o rascunho';
+    upd.textContent = S.cur.isPublished ? 'Atualizar o post' : 'Atualizar o rascunho';
     $('done-pushnote').textContent = S.cur.isPublished
-      ? 'Isso republica a página pública sem enviar e-mail.'
-      : 'Isso grava a nova versão no rascunho do Substack.';
+      ? 'Isso grava a nova versão no Substack sem republicar. Depois, abra o editor para publicar a alteração.'
+      : 'Isso grava a nova versão no rascunho do Substack. Depois, abra o editor para publicar.';
     showView('done');
     setStatus('pronto');
   } catch (e) { showErr(e.message, 'err-rev'); }
@@ -1718,12 +1718,11 @@ $('done-push').onclick = async () => {
   $('done-push').disabled = true;
   try {
     const body = { version: S.lastApplied };
-    if (S.cur.isPublished) body.republish = true;
     const r = await apiFetch(`/api/posts/${S.cur.id}/push?edition=${encodeURIComponent(S.cur.edition)}`,
       { method: 'POST', headers: { ...H(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
-    $('done-pushnote').textContent = `Atualizado ✓ (v${j.pushedVersion}${j.republished ? ' + republicado' : ''}).`;
+    $('done-pushnote').textContent = `Atualizado ✓ (v${j.pushedVersion}). Abra o editor do Substack para publicar.`;
     $('done-push').disabled = true;
     setStatus('pronto');
   } catch (e) { showErr(e.message, 'err-done'); $('done-push').disabled = false; }
