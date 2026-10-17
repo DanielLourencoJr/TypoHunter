@@ -108,7 +108,15 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   globalThis.fetch = async (input, init = {}) => {
     const url = new URL(input);
     if (url.hostname !== "e2e-example.substack.com" && url.hostname !== "substack.com") {
+      if (url.hostname === "e2e-second.substack.com" && url.pathname === "/api/v1/archive") {
+        assert.equal(new Headers(init.headers).get("cookie"), null, "profile-wide published counts use public archives without sending the reviewer SID");
+        return response([{ slug: "second-post-1" }, { slug: "second-post-2" }, { title: "unpublished" }]);
+      }
       throw new Error(`unexpected external request in E2E: ${url.hostname}`);
+    }
+    if (url.pathname === "/api/v1/archive") {
+      assert.equal(new Headers(init.headers).get("cookie"), null, "public archive counting does not send the reviewer SID");
+      return response([{ slug: "first-post" }]);
     }
     if (url.pathname === "/api/v1/user/e2e-writer/public_profile") {
       assert.equal(new Headers(init.headers).get("cookie"), null, "public profile lookup does not send the reviewer SID");
@@ -223,6 +231,9 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   const activeSession = await (await realFetch(`${baseUrl}/api/auth/session`, { headers: { Cookie: sessionCookie } })).json();
   assert.equal(activeSession.pub, "e2e-example.substack.com");
   assert.equal(activeSession.landing, "drafts", "landing choice survives page reload");
+  const dashboardTotals = await realFetch(`${baseUrl}/api/profile/totals?host=e2e-example.substack.com&host=e2e-second.substack.com`, { headers: { Cookie: sessionCookie } });
+  assert.equal(dashboardTotals.status, 200);
+  assert.deepEqual(await dashboardTotals.json(), { drafts: 1, published: 3 }, "dashboard counts verified drafts and public posts across profile publications");
 
   challengeDeleted = false;
   const expiringResponse = await challengeRequest();

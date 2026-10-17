@@ -894,6 +894,40 @@ const server = http.createServer(async (req, res) => {  try {
       });
     }
 
+    // Dashboard profile-wide totals. Drafts are private and are counted only
+    // for the publication bound to this verified session. Published posts are
+    // public, so count the profile's listed publications through their archives.
+    if (req.method === "GET" && url.pathname === "/api/profile/totals") {
+      if (!req.authSession) return send(res, 401, { error: "login required" });
+      const hosts = [...new Set(url.searchParams.getAll("host"))];
+      if (!hosts.length || hosts.length > 20 || hosts.some((host) => !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.substack\.com$/i.test(host))) {
+        return send(res, 400, { error: "invalid publication list" });
+      }
+      let drafts = null;
+      try {
+        const result = await listDrafts({ sid: sidFrom(req), publicationUrl: req.authSession.pub, limit: 1, offset: 0 });
+        drafts = result.total ?? null;
+      } catch { /* private drafts are unavailable for the verified publication */ }
+      let published = 0;
+      try {
+        for (const host of hosts) {
+          let offset = 0;
+          let pages = 0;
+          while (pages++ < 100) {
+            const response = await fetch(`https://${host}/api/v1/archive?sort=new&limit=100&search=&offset=${offset}`);
+            const items = await response.json().catch(() => null);
+            if (!response.ok || !Array.isArray(items)) throw new Error("archive unavailable");
+            published += items.filter((item) => item.slug).length;
+            if (items.length < 100) break;
+            offset += items.length;
+          }
+        }
+      } catch {
+        published = null;
+      }
+      return send(res, 200, { drafts, published });
+    }
+
     // get one draft -> markdown + versions (per edition)
     const mGet = url.pathname.match(/^\/api\/posts\/(\d+)$/);
     if (req.method === "GET" && mGet) {

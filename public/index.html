@@ -1178,18 +1178,23 @@ async function showDash() {
   }
   let counts = '';
   try {
-    const r = await apiFetch('/api/posts?limit=1', { headers: H() });
+    let totalsUrl = '/api/posts?limit=1';
+    if (hasProfilePublications) {
+      const params = new URLSearchParams();
+      profilePublications.forEach((pub) => params.append('host', pub.host));
+      totalsUrl = '/api/profile/totals?' + params.toString();
+    }
+    const r = await apiFetch(totalsUrl, { headers: H() });
     const j = await r.json();
-    if (!j.error && j.totals) {
-      const t = j.totals;
+    const t = hasProfilePublications ? j : j.totals;
+    if (!j.error && t) {
       counts = `${t.drafts ?? '?'} rascunhos · ${t.published ?? '?'} publicados`;
     }
   } catch { /* segue sem contagem */ }
-  const who = S.accessCheckedAs ? `verificado como @${esc(S.accessCheckedAs)}` : 'conta revisora';
   $('dash-info').innerHTML =
     `<p style="font-size:18px;margin:0 0 4px"><strong>${esc(ref.name || S.pub)}</strong></p>` +
-    `<p class="hint" style="margin:0 0 8px">${S.pub ? `<a href="https://${esc(S.pub)}" target="_blank" rel="noopener">${esc(S.pub)}</a>` : esc(ref.handle || '')}${counts ? ' · ' + counts : ''}</p>` +
-    `<p class="hint" style="margin:0">Acesso confirmado ✓ (${who})</p>`;
+    (counts ? `<p class="hint" style="margin:0 0 4px">${counts}</p>` : '') +
+    (hasProfilePublications ? '<p class="hint" style="font-size:12px;margin:0">A contagem de rascunhos considera apenas publicações verificadas.</p>' : '');
 }
 async function openProfilePublication(host) {
   const pub = S.ref?.kind === 'profile' ? S.ref.publications?.find((item) => item.host === host) : null;
