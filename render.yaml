@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: typohunter
+    runtime: node
+    plan: free
+    branch: master
+    buildCommand: npm ci
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LLM_ORDER
+        value: gemini,groq
+      - key: REVIEWER_EMAIL
+        value: substack.proofreader@proton.me
+      - key: REVIEWER_SID
+        sync: false
+      - key: SUBSTACK_SID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
