@@ -139,7 +139,7 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
       if (challengeDraft) posts.unshift({ id: challengeDraft.id, draft_title: challengeDraft.draft_title, audience: "everyone" });
       return response({ posts, total: posts.length });
     }
-    if (url.pathname === "/api/v1/post_management/published") return response({ posts: [], total: 0 });
+    if (url.pathname === "/api/v1/post_management/published") return response({ posts: [], total: 43 });
     if (url.pathname === `/api/v1/drafts/${draftId}` && (!init.method || init.method === "GET")) {
       return response(remoteDraft);
     }
@@ -233,7 +233,7 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   assert.equal(activeSession.landing, "drafts", "landing choice survives page reload");
   const dashboardTotals = await realFetch(`${baseUrl}/api/profile/totals?host=e2e-example.substack.com&host=e2e-second.substack.com`, { headers: { Cookie: sessionCookie } });
   assert.equal(dashboardTotals.status, 200);
-  assert.deepEqual(await dashboardTotals.json(), { drafts: { "e2e-example.substack.com": 1 }, published: 3 }, "dashboard counts verified drafts and public posts across profile publications");
+  assert.deepEqual(await dashboardTotals.json(), { drafts: { "e2e-example.substack.com": 1 }, published: 45 }, "dashboard uses the verified publication's complete total and adds other public archives");
 
   challengeDeleted = false;
   const expiringResponse = await challengeRequest();

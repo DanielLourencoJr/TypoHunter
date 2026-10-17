@@ -913,6 +913,16 @@ const server = http.createServer(async (req, res) => {  try {
       let published = 0;
       try {
         for (const host of hosts) {
+          if (host === req.authSession.pub) {
+            try {
+              const result = await listPublished({ sid: sidFrom(req), publicationUrl: host, limit: 1, offset: 0 });
+              const total = Number(result?.total);
+              if (Number.isFinite(total)) {
+                published += total;
+                continue;
+              }
+            } catch { /* fall back to the public archive if contributor totals fail */ }
+          }
           let offset = 0;
           let pages = 0;
           while (pages++ < 100) {
