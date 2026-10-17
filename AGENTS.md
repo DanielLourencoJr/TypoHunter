@@ -18,7 +18,9 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   main-guard so importing `server.js` does not bind a port), and
   `test/corpus.test.mjs` (re-derives the frozen corpus hashes; never regenerates).
   `npm run test:e2e` starts the real server on loopback and exercises the draft
-  review flow against a mocked Substack API; no account or model key is used.
+  review flow and auth slide navigation in Chromium against mocked APIs; no
+  account or model key is used. Install the browser once with
+  `npx playwright install chromium`.
   Still run `node --check <file>` on edits; for `public/index.html`, extract the
   `<script>` block and `node --check` it.
 - Substack conversion and API modules are vendored under `lib/substack-cli/`

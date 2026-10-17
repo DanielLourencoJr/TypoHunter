@@ -73,8 +73,9 @@ Edits made directly in the Substack editor are picked up automatically as
 
 ## Tests and CI
 
-Run `npm test` for unit and integration tests, then `npm run test:e2e` for the
-main draft review workflow. The end-to-end test uses a mocked Substack API and
-needs no credentials. GitHub Actions runs both commands on Node.js 18, 20, and
-22. Vendored Substack library sources and their upstream revisions are recorded
-in [`lib/VENDORED.md`](lib/VENDORED.md).
+Run `npm test` for unit and integration tests. For `npm run test:e2e`, install
+the Playwright browser once with `npx playwright install chromium`, then run the
+main draft review and browser navigation flows. They use a mocked Substack API
+and need no credentials. GitHub Actions installs Chromium and runs both suites
+on Node.js 18, 20, and 22. Vendored Substack library sources and their upstream
+revisions are recorded in [`lib/VENDORED.md`](lib/VENDORED.md).

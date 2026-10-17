@@ -892,6 +892,8 @@ function setAuthSlide(index) {
   const stage = $('welcome-auth');
   const slides = [...stage.querySelectorAll('.auth-screen')];
   const active = Math.max(0, Math.min(Number(index) || 0, slides.length - 1));
+  stage.scrollTop = 0;
+  stage.scrollLeft = 0;
   stage.setAttribute('data-slide', String(active));
   slides.forEach((slide, position) => {
     slide.style.transform = `translateY(${(position - active) * 100}%)`;
@@ -929,7 +931,7 @@ function showLoginGate() {
 }
 function showAuthGate() {
   focusSetupStep();
-  $('auth-ref').focus();
+  $('auth-ref').focus({ preventScroll: true });
 }
 function expireLogin() {
   S.auth = null;
