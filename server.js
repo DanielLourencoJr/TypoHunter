@@ -10,7 +10,6 @@ import { parseFrontmatter, stringifyFrontmatter } from "./lib/substack-cli/front
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
 import { providersFromEnv } from "./lib/llm.js";
 import { stopOpencodeServer } from "./lib/opencode-server.js";
-import { PROBE_VARIANTS, runPublishVariant } from "./lib/publish-probe.js";
 import {
   splitParagraphs, paraHash, promptVersion,
   partitionParagraphs, groupNewUnits, uniqueUnits, proofreadText,
@@ -583,48 +582,6 @@ const server = http.createServer(async (req, res) => {  try {
       const session = requestSession(req);
       if (!session) return send(res, 401, { error: "authentication required" });
       return send(res, 200, { ok: true, pub: session.pub, landing: session.landing || "dashboard", expiresAt: session.expiresAt });
-    }
-    // TEMPORARY publish-reauth diagnostic route (deleted after the investigation).
-    // Gated by the reviewer SID as a shared secret; restricted to the reviewer's
-    // own publications; returns status + error type only, never secrets.
-    if (req.method === "POST" && url.pathname === "/api/debug/publish-probe") {
-      const key = String(req.headers["x-probe-key"] || "");
-      const expected = reviewerSid();
-      const keyOk = expected && key.length === expected.length && timingSafeEqual(Buffer.from(key), Buffer.from(expected));
-      if (!keyOk) return send(res, 404, { error: "not found" });
-      const body = await readJson(req);
-      const action = String(body.action || "");
-      let profile;
-      try { profile = await fetchProfileSelf(expected); } catch (e) { return send(res, 502, { error: `profile self failed: ${String(e.message || e).slice(0, 120)}` }); }
-      const own = pubsFromProfile(profile).map((p) => p.host);
-      if (action === "pubs") return send(res, 200, { pubs: pubsFromProfile(profile) });
-      const pub = String(body.pub || "");
-      if (!own.includes(pub)) return send(res, 403, { error: "pub is not in the reviewer's own publications", own });
-      if (action === "list") {
-        const [d, p] = await Promise.all([
-          listDrafts({ sid: expected, publicationUrl: pub, limit: 30 }),
-          listPublished({ sid: expected, publicationUrl: pub, limit: 30 }),
-        ]);
-        const item = (x, published) => ({ id: x.id, title: x.draft_title || x.title || "", published: published || !!x.is_published });
-        return send(res, 200, {
-          drafts: (d.posts || []).map((x) => item(x, x.is_published)),
-          published: (p.posts || []).map((x) => item(x, true)),
-        });
-      }
-      if (action === "run") {
-        const id = String(body.id || "");
-        if (!id) return send(res, 400, { error: "id required" });
-        const variants = Array.isArray(body.variants) && body.variants.length ? body.variants : Object.keys(PROBE_VARIANTS);
-        const rawCookie = String(body.cookie || "");
-        const cookie = rawCookie && rawCookie.length < 4096 && /^[A-Za-z0-9_.\-=;: %]+$/.test(rawCookie) ? rawCookie : "";
-        const results = [];
-        for (const variant of variants) {
-          try { results.push(await runPublishVariant({ sid: expected, pub, id, variant, cookie })); }
-          catch (e) { results.push({ variant, fatal: String(e.message || e).slice(0, 200) }); }
-        }
-        return send(res, 200, { pub, id, results });
-      }
-      return send(res, 400, { error: "unknown action" });
     }
     if (req.method === "POST" && url.pathname === "/api/auth/logout") {
       if (!authRequestAllowed(req)) return send(res, 403, { error: "request rejected" });
