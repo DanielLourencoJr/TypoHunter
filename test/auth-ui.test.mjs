@@ -70,7 +70,7 @@ test("login gate presents setup and verification as sequential steps", async () 
     fetch: async (input, init = {}) => {
       const url = new URL(input, "http://localhost/");
       calls.push({ path: url.pathname, search: url.searchParams, init });
-      if (url.pathname === "/api/config") return { ok: true, status: 200, json: async () => ({ reviewerEmail: "reviewer@example.test" }) };
+      if (url.pathname === "/api/config") return { ok: true, status: 200, json: async () => ({ reviewerEmail: "" }) };
       if (url.pathname === "/api/auth/session") return { ok: false, status: 401, json: async () => ({}) };
       if (url.pathname === "/api/resolve") {
         if (resolvedInput.includes("@writer")) return { ok: true, status: 200, json: async () => ({ kind: "profile", handle: "writer", name: "Writer Profile", host: "", publications: [{ host: "writer.substack.com", name: "Writer" }, { host: "second.substack.com", name: "Second" }] }) };
@@ -127,10 +127,10 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.match(html, /#welcome-auth\.show-code #auth-screen-setup\{transform:translateY\(-100%\)/, "the transition moves the entire setup card away");
   assert.match(html, /#welcome-auth\.show-code #auth-screen-code\{transform:translateY\(0\)/, "the transition brings the code card into place");
   assert.match(html, /body\.bare\{overflow:hidden\}/, "the document cannot scroll behind the cards");
-  for (let attempt = 0; attempt < 20 && get("auth-reviewer-email")?.textContent !== "reviewer@example.test"; attempt++) {
+  for (let attempt = 0; attempt < 20 && get("auth-reviewer-email")?.textContent !== "substack.proofreader@proton.me"; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
-  assert.equal(get("auth-reviewer-email").textContent, "reviewer@example.test");
+  assert.equal(get("auth-reviewer-email").textContent, "substack.proofreader@proton.me");
 
   get("auth-ref").value = "writer.substack.com";
   await get("auth-next").onclick();

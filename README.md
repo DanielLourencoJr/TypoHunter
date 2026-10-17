@@ -25,7 +25,7 @@ runtime dependencies (nodemon is dev-only) and no build step. Node.js 18+.
 | `GROQ_MODEL`   | Defaults to `openai/gpt-oss-120b`                    |
 | `PORT`         | Defaults to `5179`                                   |
 | `REVIEWER_SID` | Optional service account used to verify contributor access and create/remove temporary code drafts; falls back to `SUBSTACK_SID` |
-| `REVIEWER_EMAIL` | Email shown in the contributor setup instructions |
+| `REVIEWER_EMAIL` | Email shown in contributor setup; defaults to `substack.proofreader@proton.me` |
 | `SUPPORT_EMAIL` | Optional support contact shown in setup instructions |
 | `AUTH_STATE_PATH` | Optional durable path for login challenges and sessions; defaults to `data/auth-state.json` |
 
@@ -47,7 +47,7 @@ and after its 15-minute expiry. If the reviewer account cannot access the
 publication, no code draft is created and the site shows the same generic code
 error.
 
-For a hosted deployment, configure `REVIEWER_SID` and `REVIEWER_EMAIL`, and put
+For a hosted deployment, configure `REVIEWER_SID` and put
 `AUTH_STATE_PATH` on persistent storage so active sessions and pending draft
 cleanup survive restarts. The reviewer account needs contributor access to each
 publication it serves.

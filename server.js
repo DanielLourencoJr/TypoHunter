@@ -709,7 +709,7 @@ const server = http.createServer(async (req, res) => {  try {
     if (req.method === "GET" && url.pathname === "/api/config") {
       return send(res, 200, {
         supportEmail: process.env.SUPPORT_EMAIL || "",
-        reviewerEmail: process.env.REVIEWER_EMAIL || "",
+        reviewerEmail: process.env.REVIEWER_EMAIL || "substack.proofreader@proton.me",
       });
     }
 

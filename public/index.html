@@ -568,6 +568,7 @@ a { color: var(--accent); }
 
 <script>
 const $ = id => document.getElementById(id);
+const DEFAULT_REVIEWER_EMAIL = 'substack.proofreader@proton.me';
 const networkFetch = (globalThis.fetch || (() => Promise.reject(new Error('fetch unavailable')))).bind(globalThis);
 async function apiFetch(input, init) {
   const response = await networkFetch(input, init);
@@ -912,9 +913,9 @@ async function loadAuthConfig() {
   try {
     const r = await apiFetch('/api/config');
     const j = await r.json();
-    $('auth-reviewer-email').textContent = j.reviewerEmail || '(e-mail da conta revisora — peça ao responsável pelo serviço)';
+    $('auth-reviewer-email').textContent = j.reviewerEmail || DEFAULT_REVIEWER_EMAIL;
   } catch {
-    $('auth-reviewer-email').textContent = '(e-mail da conta revisora indisponível)';
+    $('auth-reviewer-email').textContent = DEFAULT_REVIEWER_EMAIL;
   }
 }
 function profileInputMatches(input, handle) {
@@ -1108,7 +1109,7 @@ async function fillTutorial(pub) {
     const r = await apiFetch('/api/config');
     CFG = await r.json();
   } catch { /* opcional */ }
-  $('tut-mail').textContent = CFG.reviewerEmail || '(e-mail da conta revisora — peça ao responsável pelo serviço)';
+  $('tut-mail').textContent = CFG.reviewerEmail || DEFAULT_REVIEWER_EMAIL;
   $('tut-status').textContent = pub ? `Verificando acesso a ${pub}…` : '';
   $('tut-support').innerHTML = CFG.supportEmail
     ? `<span class="hint">Travou em alguma etapa? <a href="mailto:${esc(CFG.supportEmail)}">Fale com o suporte por e-mail</a>.</span>`
