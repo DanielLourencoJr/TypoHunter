@@ -7,6 +7,7 @@ import vm from "node:vm";
 // config) in a vm sandbox with minimal DOM stubs. Logic is exercised through
 // the real functions — never copied — per AGENTS.md.
 const html = fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+assert.match(html, /<h2>Artigos<\/h2>/, "the post library is titled Artigos without a step number");
 const blocks = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 const appSrc = blocks.find((b) => b.includes("function renderMarkdown"));
 assert.ok(appSrc, "inline app script not found");
