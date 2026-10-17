@@ -35,7 +35,7 @@ function element(id) {
   };
 }
 
-test("login gate allows the verification tab and keeps access results generic", async () => {
+test("login gate presents setup and verification as sequential steps", async () => {
   const elements = new Map();
   const calls = [];
   let verificationSucceeds = false;
@@ -110,22 +110,21 @@ test("login gate allows the verification tab and keeps access results generic", 
   get("welcome-start").onclick();
   assert.equal(get("welcome-intro").style.display, "none");
   assert.equal(get("welcome-auth").style.display, "");
-  assert.equal(get("auth-tab-code").getAttribute("aria-selected"), "false");
-  get("auth-tab-code").onclick();
-  assert.equal(get("auth-panel-code").style.display, "");
-  assert.equal(get("auth-tab-code").getAttribute("aria-selected"), "true");
+  assert.notEqual(get("auth-panel-setup").style.display, "none", "contributor setup is the first step");
+  assert.notEqual(get("auth-panel-code").style.display, "none", "verification follows setup on the same page");
+  assert.ok(html.indexOf('id="auth-panel-setup"') < html.indexOf('id="auth-panel-code"'), "setup appears before verification");
+  assert.doesNotMatch(html, /auth-tab|role="tablist"/, "the login flow has no tabs");
   for (let attempt = 0; attempt < 20 && get("auth-reviewer-email")?.textContent !== "reviewer@example.test"; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   assert.equal(get("auth-reviewer-email").textContent, "reviewer@example.test");
 
-  get("auth-tab-setup").onclick();
   get("auth-ref").value = "writer.substack.com";
   await get("auth-next").onclick();
   assert.ok(calls.some((call) => call.path === "/api/auth/challenge"), "setup submits a challenge request");
   const challengeCall = calls.find((call) => call.path === "/api/auth/challenge");
   assert.deepEqual(JSON.parse(challengeCall.init.body), { pub: "writer.substack.com", landing: "drafts" });
-  assert.equal(get("auth-panel-code").style.display, "");
+  assert.notEqual(get("auth-panel-code").style.display, "none");
   assert.match(get("auth-setup-status").textContent, /rascunho temporário/);
 
   get("auth-code").value = "wrong-code";
