@@ -58,14 +58,16 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   reused across runs, `OPENCODE_URL` attaches to a server you already run;
   `OPENCODE_START_TIMEOUT_MS` (default 60000) bounds the spawn wait. It leads the
   default `LLM_ORDER` (`opencode,gemini,groq`) and is skipped when the CLI is
-  absent; the hosted blueprint installs the CLI during build and sets
-  `OPENCODE_API_KEY`. The session API exposes no temperature/max-tokens, so it is
-  less deterministic than the HTTP providers, and the quality gate found it both
-  missing a real typo and editing correct prose — the accepted trade-off of
-  leading with the effectively-uncapped free model. A missing/expired CLI
-  credential (401/403) is marked `err.failover`, so it drops to the next
-  provider instead of aborting the job (matters when the CLI is installed but
-  `OPENCODE_API_KEY` is unset).
+  absent. Hosted does NOT run it: `opencode serve` is a ~186MB Bun process that
+  exceeds the 512MB free tier (verified — Render OOM-restarted the service when
+  a proofread spawned it), so `render.yaml` stays `gemini,groq`; a CLI path can
+  be given via `OPENCODE_BIN`, and a host with `OPENCODE_API_KEY` set uses the
+  CLI credential in place of `auth.json`. The session API exposes no
+  temperature/max-tokens, so it is less deterministic than the HTTP providers,
+  and the quality gate found it both missing a real typo and editing correct
+  prose — the accepted trade-off of leading with the effectively-uncapped free
+  model. A missing/expired CLI credential (401/403) is marked `err.failover`, so
+  it drops to the next provider instead of aborting the job.
   `REVIEWER_SID` is the service (contributor-model) identity; central vault keeps
   `SUBSTACK_SID_REVIEWER` + `SUBSTACK_USERID_REVIEWER` + `SUBSTACK_HANDLE_REVIEWER`.
   `REVIEWER_EMAIL` is public setup guidance shown by the login gate. Auth

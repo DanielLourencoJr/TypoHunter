@@ -4,25 +4,17 @@ services:
     runtime: node
     plan: free
     branch: master
-    # Install the OpenCode CLI from npm (its per-platform binary needs no
-    # `unzip`, unlike the curl installer). Relative OPENCODE_BIN resolves
-    # against the repo root. If the install is skipped the app falls through to
-    # gemini/groq.
-    buildCommand: npm ci && { npm i --no-save --no-audit --no-fund opencode-ai@1.19.1 > .opencode-build.log 2>&1; echo "npm-exit=$?" >> .opencode-build.log; true; }
+    # The OpenCode CLI is NOT installed on this free instance: `opencode serve`
+    # is a ~186MB Bun process that exceeds the 512MB free-tier limit (verified —
+    # Render restarted the service on OOM). Hosted therefore uses gemini/groq;
+    # OpenCode still leads locally where the CLI already runs.
+    buildCommand: npm ci
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-      # OpenCode leads: the free model is used "within OpenCode".
-      # OPENCODE_API_KEY is the CLI's credential (set in the dashboard).
       - key: LLM_ORDER
-        value: opencode,gemini,groq
-      - key: OPENCODE_BIN
-        value: node_modules/.bin/opencode
-      - key: OPENCODE_API_KEY
-        sync: false
-      - key: OPENCODE_DISABLE_AUTOUPDATE
-        value: "1"
+        value: gemini,groq
       - key: REVIEWER_EMAIL
         value: substack.proofreader@proton.me
       - key: REVIEWER_SID
