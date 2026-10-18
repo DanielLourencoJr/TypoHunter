@@ -1,13 +1,17 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   GROQ_DEFAULT_MODEL, GEMINI_DEFAULT_MODEL, defaultModel,
   groqProvider, geminiProvider, providersFromEnv, chatCompletion,
   opencodeProvider, OPENCODE_DEFAULT_MODEL,
 } from "../lib/llm.js";
-import { sessionGenerate } from "../lib/opencode-server.js";
+import { sessionGenerate, opencodeBinary } from "../lib/opencode-server.js";
 
-const ENV_KEYS = ["LLM_ORDER", "GROQ_API_KEY", "GEMINI_API_KEY", "GROQ_MODEL", "GEMINI_MODEL", "OPENCODE_MODEL", "OPENCODE_URL"];
+const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+const ENV_KEYS = ["LLM_ORDER", "GROQ_API_KEY", "GEMINI_API_KEY", "GROQ_MODEL", "GEMINI_MODEL", "OPENCODE_MODEL", "OPENCODE_URL", "OPENCODE_BIN"];
 const savedEnv = {};
 for (const k of ENV_KEYS) savedEnv[k] = process.env[k];
 
@@ -229,6 +233,19 @@ test("opencodeProvider: no key, kind=opencode, free default model", () => {
   assert.match(OPENCODE_DEFAULT_MODEL, /-free$/);
   assert.equal(p.base, undefined);
   assert.ok(p.key);
+});
+
+test("opencodeBinary: a relative OPENCODE_BIN resolves against the repo root", () => {
+  const prev = process.env.OPENCODE_BIN;
+  process.env.OPENCODE_BIN = "package.json";
+  try {
+    const bin = opencodeBinary();
+    assert.equal(bin, path.join(REPO_ROOT, "package.json"));
+    assert.ok(path.isAbsolute(bin));
+  } finally {
+    if (prev === undefined) delete process.env.OPENCODE_BIN;
+    else process.env.OPENCODE_BIN = prev;
+  }
 });
 
 test("opencodeProvider: env + explicit model override", () => {
