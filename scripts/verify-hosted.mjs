@@ -7,7 +7,7 @@
 // Usage:
 //   node scripts/verify-hosted.mjs --url https://typohunter.onrender.com
 //   node scripts/verify-hosted.mjs --url ... --expect-commit 25f9220
-//   node scripts/verify-hosted.mjs --url ... --deep      # needs REVIEWER_SID + SMOKE_PUB
+//   node scripts/verify-hosted.mjs --url ... --deep      # needs REVIEWER_SID
 //
 // Exit code is non-zero if any check fails. Never prints secrets.
 
@@ -65,8 +65,8 @@ async function main() {
 
   if (deep) {
     const key = process.env.REVIEWER_SID || "";
-    if (!key || !process.env.SMOKE_PUB) {
-      fail("--deep needs REVIEWER_SID and SMOKE_PUB in .env");
+    if (!key) {
+      fail("--deep needs REVIEWER_SID in .env");
     } else {
       const r = await fetch(`${url}/api/health/deep`, {
         method: "POST",
