@@ -154,6 +154,12 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   in-memory — a restart drops it, clients re-enqueue via their retry path.
 - Never write literal NUL bytes in JS regex source (they mangle to U+FFFD);
   always use the `\u0000` escape.
+- Revisit (unfixed): the lite model once proposed a non-local, whole-paragraph
+  rewrite — replacing one sentence while dropping a connective — which the
+  `_base.yaml` rules forbid; seen on
+  `testdata/corpus/posts/191869196-ciclo-de-odio-em-attack-on-titan.md:47`.
+  Not reproducible from the Codespace (no Gemini/Groq keys here). If it
+  recurs, consider a conservative locality guard in `filterSuggestions`.
 - `node --check` catches syntax only; re-read edited regions for dropped
   declarations (has happened twice in this file's history).
 - Commits: short imperative one-liners, no PR process in this repo.
