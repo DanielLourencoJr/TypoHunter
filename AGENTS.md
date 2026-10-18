@@ -62,7 +62,10 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   `OPENCODE_API_KEY`. The session API exposes no temperature/max-tokens, so it is
   less deterministic than the HTTP providers, and the quality gate found it both
   missing a real typo and editing correct prose — the accepted trade-off of
-  leading with the effectively-uncapped free model.
+  leading with the effectively-uncapped free model. A missing/expired CLI
+  credential (401/403) is marked `err.failover`, so it drops to the next
+  provider instead of aborting the job (matters when the CLI is installed but
+  `OPENCODE_API_KEY` is unset).
   `REVIEWER_SID` is the service (contributor-model) identity; central vault keeps
   `SUBSTACK_SID_REVIEWER` + `SUBSTACK_USERID_REVIEWER` + `SUBSTACK_HANDLE_REVIEWER`.
   `REVIEWER_EMAIL` is public setup guidance shown by the login gate. Auth

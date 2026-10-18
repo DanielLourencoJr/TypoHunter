@@ -9,7 +9,7 @@ import {
   mergeLedgerSuggestions, reviewedPct, formatTarget,
   proofreadText, proofreadMarkdown, proofreadWithFailover,
 } from "../lib/proofread.js";
-import { groqProvider, geminiProvider } from "../lib/llm.js";
+import { groqProvider, geminiProvider, opencodeProvider } from "../lib/llm.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -324,6 +324,19 @@ test("proofreadText: fatal 4xx rethrows and does not hammer the next provider", 
     const order = [groqProvider({ key: "g" }), geminiProvider({ key: "m" })];
     await assert.rejects(proofreadText("teh", { providers: order, system: "S", template: "{text}" }), /HTTP 401/);
     assert.equal(calls.length, 1);
+  } finally { restore(); }
+});
+
+test("proofreadText: opencode credential failure fails over, not fatal", async () => {
+  const { calls, restore } = mockFetch((rec) => {
+    if (rec.url.includes("/session")) return resp({ ok: false, status: 401, body: "unauthorized" });
+    return llmReply([{ original: "teh", replacement: "the", reason: "typo" }]);
+  });
+  try {
+    const order = [opencodeProvider({ base: "http://127.0.0.1:5198" }), groqProvider({ key: "g", model: "gm" })];
+    const r = await proofreadText("teh cat", { providers: order, system: "S", template: "{text}" });
+    assert.equal(r.provider, "groq");
+    assert.equal(calls.length, 2, "opencode 401 should fail over without retrying");
   } finally { restore(); }
 });
 

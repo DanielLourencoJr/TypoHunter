@@ -318,3 +318,14 @@ test("sessionGenerate: network failure => transient", async () => {
       (e) => e.transient === true && e.retryInSec === 3 && /network error/.test(e.message));
   } finally { restore(); }
 });
+
+test("sessionGenerate: 401 => failover (missing hosted credential), not fatal", async () => {
+  const { restore } = mockFetch((rec) => {
+    if (rec.url.endsWith("/session")) return resp({ body: JSON.stringify({ id: "ses_a" }) });
+    return resp({ ok: false, status: 401, body: "unauthorized" });
+  });
+  try {
+    await assert.rejects(sessionGenerate("http://127.0.0.1:5198", "m", { system: "s", user: "u" }),
+      (e) => e.failover === true && !e.quotaExhausted && !e.transient);
+  } finally { restore(); }
+});
