@@ -60,7 +60,8 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   default `LLM_ORDER` (`opencode,gemini,groq`) and is skipped when the CLI is
   absent. Hosted does NOT run it: `opencode serve` is a ~186MB Bun process that
   exceeds the 512MB free tier (verified — Render OOM-restarted the service when
-  a proofread spawned it), so `render.yaml` stays `gemini,groq`; a CLI path can
+  a proofread spawned it), so `render.yaml` stays `gemini,groq` and scrubs any
+  binary from the build so it cannot be spawned; a CLI path can
   be given via `OPENCODE_BIN`, and a host with `OPENCODE_API_KEY` set uses the
   CLI credential in place of `auth.json`. The session API exposes no
   temperature/max-tokens, so it is less deterministic than the HTTP providers,

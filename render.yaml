@@ -4,11 +4,13 @@ services:
     runtime: node
     plan: free
     branch: master
-    # The OpenCode CLI is NOT installed on this free instance: `opencode serve`
-    # is a ~186MB Bun process that exceeds the 512MB free-tier limit (verified —
-    # Render restarted the service on OOM). Hosted therefore uses gemini/groq;
-    # OpenCode still leads locally where the CLI already runs.
-    buildCommand: npm ci
+    # The OpenCode CLI must NOT exist on this free instance: `opencode serve` is
+    # a ~186MB Bun process that exceeds the 512MB free-tier limit (verified —
+    # Render OOM-restarted the service when a proofread spawned it). This also
+    # scrubs any binary left by an earlier build and by a stale dashboard
+    # OPENCODE_BIN, so hosted always uses gemini/groq. OpenCode still leads
+    # locally, where the CLI already runs.
+    buildCommand: npm ci && rm -rf "$HOME/.opencode" node_modules/opencode-ai node_modules/opencode-linux-x64 node_modules/opencode-linux-x64-baseline node_modules/.bin/opencode
     startCommand: npm start
     envVars:
       - key: NODE_ENV
