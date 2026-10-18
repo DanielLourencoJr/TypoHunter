@@ -64,7 +64,16 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   `SUBSTACK_SID_REVIEWER` + `SUBSTACK_USERID_REVIEWER` + `SUBSTACK_HANDLE_REVIEWER`.
   `REVIEWER_EMAIL` is public setup guidance shown by the login gate. Auth
   challenges and sessions are stored in `data/auth-state.json` (or
-  `AUTH_STATE_PATH`); hosted deployments must point this at persistent storage.
+  `AUTH_STATE_PATH`). On free hosting the filesystem (and thus the local store
+  and sessions) is ephemeral, which is fine: Substack's editor keeps the
+  authoritative revision history. `GET /api/health` (public) reports the live
+  commit/providers; `POST /api/health/deep` (gated by the reviewer SID as
+  `x-health-key`, needs `SMOKE_PUB`) proves the reviewer can still edit the test
+  publication by creating and immediately deleting one throwaway draft;
+  `npm run verify:hosted [-- --deep]` checks both from anywhere (Substack calls
+  happen server-side). Publishing to the live page is done in the Substack
+  editor — server-side republish is intentionally off (Substack gates it behind
+  a fresh sign-in).
   Verification drafts expire after 15 minutes and are removed on successful
   verification or by the cleanup loop after expiry. Sessions last 12 hours.
   Direct publication sign-in opens its drafts. Profile sign-in lists public

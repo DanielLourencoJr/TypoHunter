@@ -10,7 +10,9 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "test": "node --test test/*.test.mjs",
-    "test:e2e": "node --test e2e/*.test.mjs"
+    "test:e2e": "node --test e2e/*.test.mjs",
+    "test:hosted:ui": "BASE_URL=${BASE_URL:-https://typohunter.onrender.com} node --test e2e/auth-slides.playwright.test.mjs",
+    "verify:hosted": "node scripts/verify-hosted.mjs"
   },
   "devDependencies": {
     "nodemon": "^3.1.14",

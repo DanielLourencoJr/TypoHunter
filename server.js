@@ -694,6 +694,38 @@ const server = http.createServer(async (req, res) => {  try {
       return send(res, 200, { ok: true, pub: session.pub, landing: session.landing, expiresAt: session.expiresAt });
     }
 
+    // Deployment edit-check: prove the reviewer (contributor) identity can still
+    // write to the configured test publication. Gated by the reviewer SID as a
+    // shared secret; creates a throwaway draft and deletes it immediately, so
+    // nothing is left behind. Reports status only, never secrets or content.
+    if (req.method === "POST" && url.pathname === "/api/health/deep") {
+      const key = String(req.headers["x-health-key"] || "");
+      const expected = reviewerSid();
+      const keyOk = expected && key.length === expected.length && timingSafeEqual(Buffer.from(key), Buffer.from(expected));
+      if (!keyOk) return send(res, 404, { error: "not found" });
+      const pub = publicationHost(process.env.SMOKE_PUB);
+      if (!pub) return send(res, 409, { error: "SMOKE_PUB not configured" });
+      let createdId = null;
+      try {
+        await listDrafts({ sid: expected, publicationUrl: pub, limit: 1 });
+        const created = await createDraft({
+          sid: expected,
+          publicationUrl: pub,
+          title: `TypoHunter capacity check ${new Date().toISOString()}`,
+          subtitle: "Temporary check; TypoHunter deletes this draft automatically.",
+          markdown: "TypoHunter verified it can edit this publication. This draft is removed automatically.",
+          audience: "everyone",
+        });
+        if (!created?.id || !/^\d+$/.test(String(created.id))) throw new Error("draft id missing");
+        createdId = String(created.id);
+        await deleteDraft({ sid: expected, publicationUrl: pub, id: createdId });
+        return send(res, 200, { ok: true, canEdit: true, pub, commit: process.env.RENDER_GIT_COMMIT || "dev" });
+      } catch (e) {
+        if (createdId) { try { await deleteDraft({ sid: expected, publicationUrl: pub, id: createdId }); } catch { /* best effort */ } }
+        return send(res, 502, { ok: false, canEdit: false, pub, error: String(e.message || e).slice(0, 200) });
+      }
+    }
+
     // static (never cached: the UI evolves fast during testing)
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
       const f = path.join(ROOT, "public", "index.html");
@@ -705,7 +737,7 @@ const server = http.createServer(async (req, res) => {  try {
 
     const session = requestSession(req);
     if (session) req.authSession = session;
-    else if (!(req.method === "GET" && (url.pathname === "/api/config" || url.pathname === "/api/resolve"))) {
+    else if (!(req.method === "GET" && (url.pathname === "/api/config" || url.pathname === "/api/resolve" || url.pathname === "/api/health"))) {
       return send(res, 401, { error: "authentication required" });
     }
 
@@ -722,6 +754,21 @@ const server = http.createServer(async (req, res) => {  try {
       return send(res, 200, {
         supportEmail: process.env.SUPPORT_EMAIL || "",
         reviewerEmail: process.env.REVIEWER_EMAIL || "substack.proofreader@proton.me",
+      });
+    }
+
+    // public deployment identity (no secrets): which commit is live, which
+    // providers are configured, and whether the reviewer edit-check is set up.
+    if (req.method === "GET" && url.pathname === "/api/health") {
+      let providers = [];
+      try { providers = providersFromEnv().map((p) => p.name); } catch { providers = []; }
+      return send(res, 200, {
+        ok: true,
+        commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || "dev",
+        node: process.version,
+        providers,
+        reviewerEmail: process.env.REVIEWER_EMAIL || "substack.proofreader@proton.me",
+        deep: Boolean(publicationHost(process.env.SMOKE_PUB)),
       });
     }
 

@@ -17,6 +17,8 @@ services:
         sync: false
       - key: SUBSTACK_SID
         sync: false
+      - key: SMOKE_PUB
+        value: danielloureno.substack.com
       - key: GEMINI_API_KEY
         sync: false
       - key: GROQ_API_KEY

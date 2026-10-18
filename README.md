@@ -47,10 +47,13 @@ and after its 15-minute expiry. If the reviewer account cannot access the
 publication, no code draft is created and the site shows the same generic code
 error.
 
-For a hosted deployment, configure `REVIEWER_SID` and put
-`AUTH_STATE_PATH` on persistent storage so active sessions and pending draft
-cleanup survive restarts. The reviewer account needs contributor access to each
-publication it serves.
+For a hosted deployment, configure `REVIEWER_SID`; the reviewer account needs
+contributor access to each publication it serves. On free hosting the
+filesystem is ephemeral, so the local version store and login sessions reset on
+restart/redeploy. That is acceptable: the pushed content and its revision
+history live in Substack's own editor history (each TypoHunter push is
+attributed there), so nothing authoritative is lost. Point `AUTH_STATE_PATH` at
+persistent storage only if you want sessions to survive restarts.
 
 ## Workflow
 
@@ -63,13 +66,32 @@ publication it serves.
    touches your voice.
 4. **Apply** — checked fixes become a new local version. Nothing reaches
    Substack yet; every version is kept and rewound from the history.
-5. **Push** — writes the version back into the Substack draft. For already
-   published posts, an extra *Republish live* checkbox updates the public page
-   without sending email. Translation editions of published posts can't be
-   edited (a Substack limitation) and stay locked.
+5. **Push** — writes the version back into the Substack draft. Publishing to the
+   public page is done from the Substack editor (the done screen links straight
+   to it): server-side republish is off because Substack gates publishing behind
+   a fresh sign-in. Translation editions of published posts can't be edited (a
+   Substack limitation) and stay locked.
 
 Edits made directly in the Substack editor are picked up automatically as
 `synced from Substack` versions when the post is reopened.
+
+## Verify a hosted deployment
+
+`GET /api/health` (public, no secrets) reports the live commit, Node version,
+configured provider names, the reviewer email, and whether the edit-check is
+configured.
+
+```bash
+npm run verify:hosted -- --url https://typohunter.onrender.com
+# --deep proves the reviewer identity can still edit the test publication
+# (needs REVIEWER_SID + SMOKE_PUB in .env): it creates and immediately deletes
+# one throwaway draft there, leaving nothing behind.
+npm run verify:hosted -- --url https://typohunter.onrender.com --deep
+```
+
+`npm run test:hosted:ui` runs the browser navigation spec against the deployed
+URL (override with `BASE_URL=…`); its API calls are mocked, so it needs no
+credentials.
 
 ## Tests and CI
 

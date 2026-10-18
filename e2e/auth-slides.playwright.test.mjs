@@ -3,17 +3,27 @@ import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { server } from "../server.js";
 
-test("browser shows welcome, contributor setup, then verification code", { timeout: 30_000 }, async (t) => {
-  server.listen(0, "127.0.0.1");
-  await new Promise((resolve, reject) => {
-    server.once("listening", resolve);
-    server.once("error", reject);
-  });
-  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+// Runs against the in-process server by default, or against a deployed URL when
+// BASE_URL is set (the same spec, so hosted UI behavior is checked like local).
+// All /api/** calls are mocked below, so a hosted run needs no real Substack.
+const HOSTED = String(process.env.BASE_URL || "").replace(/\/+$/, "");
+
+test(`browser shows welcome, contributor setup, then verification code${HOSTED ? ` (${HOSTED})` : ""}`, { timeout: 30_000 }, async (t) => {
+  let baseUrl = HOSTED;
+  let startedServer = false;
+  if (!HOSTED) {
+    server.listen(0, "127.0.0.1");
+    await new Promise((resolve, reject) => {
+      server.once("listening", resolve);
+      server.once("error", reject);
+    });
+    baseUrl = `http://127.0.0.1:${server.address().port}`;
+    startedServer = true;
+  }
   const browser = await chromium.launch({ headless: true });
   t.after(async () => {
     await browser.close();
-    if (server.listening) await new Promise((resolve) => server.close(resolve));
+    if (startedServer && server.listening) await new Promise((resolve) => server.close(resolve));
   });
 
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });

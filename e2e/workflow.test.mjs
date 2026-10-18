@@ -184,6 +184,11 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   assert.equal(anonymousPosts.status, 401, "draft APIs must be gated before login");
   const anonymousConfig = await realFetch(`${baseUrl}/api/config`);
   assert.equal((await anonymousConfig.json()).reviewerEmail, "reviewer@example.test", "reviewer email remains available before login");
+  const anonymousHealth = await realFetch(`${baseUrl}/api/health`);
+  assert.equal(anonymousHealth.status, 200, "health is public");
+  const healthBody = await anonymousHealth.json();
+  assert.equal(healthBody.ok, true);
+  assert.ok(Array.isArray(healthBody.providers));
   const profileResponse = await realFetch(`${baseUrl}/api/resolve?input=${encodeURIComponent("@e2e-writer")}`);
   const profile = await profileResponse.json();
   assert.equal(profile.kind, "profile");
