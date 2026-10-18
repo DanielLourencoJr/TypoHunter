@@ -4,13 +4,20 @@ services:
     runtime: node
     plan: free
     branch: master
-    buildCommand: npm ci
+    buildCommand: npm ci && (curl -fsSL https://opencode.ai/install | bash -s -- --version 1.19.1 --no-modify-path || true)
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
+      # OpenCode leads: install its CLI during build so the free model is used
+      # "within OpenCode"; if the install is skipped the app falls through to
+      # gemini/groq. OPENCODE_API_KEY is the CLI's credential (set in dashboard).
       - key: LLM_ORDER
-        value: gemini,groq
+        value: opencode,gemini,groq
+      - key: OPENCODE_API_KEY
+        sync: false
+      - key: OPENCODE_DISABLE_AUTOUPDATE
+        value: "1"
       - key: REVIEWER_EMAIL
         value: substack.proofreader@proton.me
       - key: REVIEWER_SID

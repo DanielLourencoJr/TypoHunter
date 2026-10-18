@@ -4,8 +4,9 @@ import {
   snapOf, sameSnap, snapOfVersion, latestMarkdown, editionParam, editionMarkdown,
   blankEdStore, migrateStore, edStore, pubsFromProfile,
   sidFrom, reviewerSid, pubFrom, readJson, send,
-  enqueueAnalysis, queueAhead, jobEtaSec, jobs,
+  enqueueAnalysis, queueAhead, jobEtaSec, jobs, pipelineProbe,
 } from "../server.js";
+import { geminiProvider } from "../lib/llm.js";
 
 function withEnv(vars, fn) {
   const saved = {};
@@ -239,4 +240,60 @@ test("queue: live pace of the running job lowers the ETA", () => {
   const fast = jobEtaSec(job);
   jobs.delete(job.id);
   assert.ok(fast < slow, `live fast pace (${fast}) should be below slow (${slow})`);
+});
+
+// ---------------------------------------------------------------------------
+// hosted pipeline self-test (POST /api/health/proofread -> pipelineProbe)
+// ---------------------------------------------------------------------------
+
+const originalFetch = globalThis.fetch;
+
+function mockFetch(handler) {
+  const calls = [];
+  globalThis.fetch = async (url, opts) => {
+    const rec = { url, opts, body: opts?.body ? JSON.parse(opts.body) : null };
+    calls.push(rec);
+    return handler(rec);
+  };
+  return { calls, restore: () => { globalThis.fetch = originalFetch; } };
+}
+
+function resp({ ok = true, status = 200, body = "" } = {}) {
+  return { ok, status, headers: { get: () => null }, async text() { return body; } };
+}
+
+test("pipelineProbe: no providers is reported, not thrown", async () => {
+  const r = await pipelineProbe({ providers: [] });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /no LLM provider/);
+});
+
+test("pipelineProbe: --only a missing provider names it", async () => {
+  const r = await pipelineProbe({ providers: [geminiProvider({ key: "k" })], only: "opencode" });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /"opencode" not configured/);
+  assert.deepEqual(r.providers, ["gemini"]);
+});
+
+test("pipelineProbe: happy path serves via the real prompt and filters suggestions", async () => {
+  const { calls, restore } = mockFetch(() => resp({
+    body: JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ suggestions: [{ original: "errro", replacement: "erro", reason: "ortografia" }] }) } }],
+      usage: { total_tokens: 9 },
+    }),
+  }));
+  try {
+    const r = await pipelineProbe({ providers: [geminiProvider({ key: "k" })], sample: "Encontrei um errro no texto." });
+    assert.equal(r.ok, true);
+    assert.equal(r.provider, "gemini");
+    assert.equal(r.model, geminiProvider({ key: "k" }).model);
+    assert.equal(r.suggestionCount, 1);
+    assert.deepEqual(r.suggestions[0], { original: "errro", replacement: "erro", reason: "ortografia" });
+    assert.ok(r.promptHash);
+    // Wired through the real prompt: system + a single text user message.
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].body.messages[0].content.length > 50);
+    assert.equal(calls[0].body.messages[1].role, "user");
+    assert.match(calls[0].body.messages[1].content, /errro/);
+  } finally { restore(); }
 });

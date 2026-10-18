@@ -576,6 +576,36 @@ async function pumpQueue() {
   }
 }
 
+// Fixed sample with one unambiguous misspelling, used by the hosted pipeline
+// self-test. The real prompt does the work; nothing here is model-facing config.
+const SMOKE_SAMPLE = "A equipe revisou o texto e encontrou um errro de digitação no primeiro parágrafo.";
+
+// Run the OFFICIAL suggestions pipeline (providers -> prompt -> proofreadText ->
+// filterSuggestions) on SMOKE_SAMPLE and report which provider/model served it.
+// `only` restricts to one provider name so a deploy can prove a SPECIFIC
+// provider (OpenCode) works, not just that some provider answered.
+export async function pipelineProbe({ providers, language = "pt", only = "", sample = SMOKE_SAMPLE } = {}) {
+  const all = providers || providersFromEnv();
+  const names = all.map((p) => p.name);
+  const list = only ? all.filter((p) => p.name === only) : all;
+  if (!list.length) {
+    return { ok: false, reason: only ? `provider "${only}" not configured` : "no LLM provider configured", providers: names, sample };
+  }
+  const ver = promptVersion(language);
+  const { suggestions, model, provider, tokens } = await proofreadText(sample, {
+    providers: list, language, system: ver.system, template: ver.template,
+  });
+  const filtered = filterSuggestions(sample, suggestions);
+  return {
+    ok: true,
+    provider, model, tokens, promptHash: ver.hash,
+    suggestionCount: filtered.length,
+    suggestions: filtered.slice(0, 8).map((s) => ({ original: s.original, replacement: s.replacement, reason: s.reason })),
+    providers: names,
+    sample,
+  };
+}
+
 const server = http.createServer(async (req, res) => {  try {
     const url = new URL(req.url, "http://localhost");
     if (req.method === "GET" && url.pathname === "/api/auth/session") {
@@ -723,6 +753,27 @@ const server = http.createServer(async (req, res) => {  try {
       } catch (e) {
         if (createdId) { try { await deleteDraft({ sid: expected, publicationUrl: pub, id: createdId }); } catch { /* best effort */ } }
         return send(res, 502, { ok: false, canEdit: false, pub, error: String(e.message || e).slice(0, 200) });
+      }
+    }
+
+    // Deployment pipeline self-test: proves an LLM provider answers through the
+    // REAL suggestions path (ordered providers -> prompt -> proofreadText ->
+    // filterSuggestions) on a fixed sample with one known typo. `only` pins a
+    // single provider so a deploy can verify OpenCode specifically. Gated by the
+    // reviewer SID; used by `npm run verify:hosted -- --pipeline [--only opencode]`.
+    if (req.method === "POST" && url.pathname === "/api/health/proofread") {
+      const key = String(req.headers["x-health-key"] || "");
+      const expected = reviewerSid();
+      const keyOk = expected && key.length === expected.length && timingSafeEqual(Buffer.from(key), Buffer.from(expected));
+      if (!keyOk) return send(res, 404, { error: "not found" });
+      const body = await readJson(req);
+      const only = typeof body.only === "string" ? body.only : "";
+      const language = typeof body.language === "string" ? body.language : "pt";
+      try {
+        const out = await pipelineProbe({ only, language });
+        return send(res, out.ok ? 200 : 409, { ...out, commit: process.env.RENDER_GIT_COMMIT || "dev" });
+      } catch (e) {
+        return send(res, 502, { ok: false, error: String(e.message || e).slice(0, 300) });
       }
     }
 

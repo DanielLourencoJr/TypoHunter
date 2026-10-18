@@ -8,6 +8,8 @@
 //   node scripts/verify-hosted.mjs --url https://typohunter.onrender.com
 //   node scripts/verify-hosted.mjs --url ... --expect-commit 25f9220
 //   node scripts/verify-hosted.mjs --url ... --deep      # needs REVIEWER_SID
+//   node scripts/verify-hosted.mjs --url ... --pipeline  # needs REVIEWER_SID
+//   node scripts/verify-hosted.mjs --url ... --pipeline --only opencode
 //
 // Exit code is non-zero if any check fails. Never prints secrets.
 
@@ -29,6 +31,8 @@ const flag = (name) => args.includes(name);
 const url = String(opt("--url", process.env.HOSTED_URL || "https://typohunter.onrender.com")).replace(/\/+$/, "");
 const expectCommit = String(opt("--expect-commit", ""));
 const deep = flag("--deep");
+const pipeline = flag("--pipeline");
+const only = String(opt("--only", ""));
 
 let failures = 0;
 const pass = (m) => console.log(`  PASS  ${m}`);
@@ -76,6 +80,27 @@ async function main() {
       const body = await r.json().catch(() => ({}));
       if (r.status === 200 && body.canEdit) pass(`reviewer can edit ${body.pub}`);
       else fail(`reviewer edit-check failed (HTTP ${r.status}${body.error ? `: ${body.error}` : ""})`);
+    }
+  }
+
+  if (pipeline) {
+    const key = process.env.REVIEWER_SID || "";
+    if (!key) {
+      fail("--pipeline needs REVIEWER_SID in .env");
+    } else {
+      const r = await fetch(`${url}/api/health/proofread`, {
+        method: "POST",
+        headers: { "x-health-key": key, "Content-Type": "application/json" },
+        body: JSON.stringify(only ? { only } : {}),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.status === 200 && body.ok) {
+        pass(`pipeline via ${body.provider} (${body.model}): ${body.suggestionCount} suggestion(s) on the known-typo sample`);
+        if (only && body.provider !== only) fail(`served by "${body.provider}", expected "${only}"`);
+        else if (!body.suggestionCount) fail("pipeline returned no suggestions for the known-typo sample");
+      } else {
+        fail(`pipeline check failed (HTTP ${r.status}${body.error ? `: ${body.error}` : body.reason ? `: ${body.reason}` : ""})`);
+      }
     }
   }
 

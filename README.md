@@ -23,6 +23,10 @@ runtime dependencies (nodemon is dev-only) and no build step. Node.js 18+.
 | `SUBSTACK_SID` | Your `substack.sid` session cookie (full account access — keep it local; revoke by logging out of Substack) |
 | `GROQ_API_KEY` | Groq API key for proofreading. Without it, a heuristic demo mode runs |
 | `GROQ_MODEL`   | Defaults to `openai/gpt-oss-120b`                    |
+| `GEMINI_API_KEY` | Optional second provider (free tier)              |
+| `GEMINI_MODEL` | Defaults to `gemini-3.5-flash-lite`                  |
+| `LLM_ORDER`    | Provider failover order; defaults to `opencode,gemini,groq` |
+| `OPENCODE_API_KEY` | Credential for the OpenCode CLI provider (hosted); local runs use the CLI's own `auth.json` |
 | `PORT`         | Defaults to `5179`                                   |
 | `REVIEWER_SID` | Optional service account used to verify contributor access and create/remove temporary code drafts; falls back to `SUBSTACK_SID` |
 | `REVIEWER_EMAIL` | Email shown in contributor setup; defaults to `substack.proofreader@proton.me` |
@@ -84,9 +88,13 @@ configured.
 ```bash
 npm run verify:hosted -- --url https://typohunter.onrender.com
 # --deep proves the reviewer identity can still edit the test publication
-# (needs REVIEWER_SID + SMOKE_PUB in .env): it creates and immediately deletes
-# one throwaway draft there, leaving nothing behind.
+# (needs REVIEWER_SID in .env): it creates and immediately deletes one
+# throwaway draft there, leaving nothing behind.
 npm run verify:hosted -- --url https://typohunter.onrender.com --deep
+# --pipeline runs the REAL suggestions pipeline on a one-typo sample and reports
+# which provider/model served it; --only pins a single provider (needs
+# REVIEWER_SID), e.g. to prove the deployed app's OpenCode provider works:
+npm run verify:hosted -- --url https://typohunter.onrender.com --pipeline --only opencode
 ```
 
 `npm run test:hosted:ui` runs the browser navigation spec against the deployed
