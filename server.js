@@ -9,7 +9,7 @@ import { draftToMarkdown, tiptapToMarkdown } from "./lib/substack-cli/convert.js
 import { parseFrontmatter, stringifyFrontmatter } from "./lib/substack-cli/frontmatter.js";
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
 import { providersFromEnv } from "./lib/llm.js";
-import { stopOpencodeServer } from "./lib/opencode-server.js";
+import { stopOpencodeServer, opencodeBinary } from "./lib/opencode-server.js";
 import {
   splitParagraphs, paraHash, promptVersion,
   partitionParagraphs, groupNewUnits, uniqueUnits, proofreadText,
@@ -775,6 +775,31 @@ const server = http.createServer(async (req, res) => {  try {
       } catch (e) {
         return send(res, 502, { ok: false, error: String(e.message || e).slice(0, 300) });
       }
+    }
+
+    // OpenCode CLI install diagnostics (gated). Reports the resolved binary
+    // path, the candidate locations, and the tail of the build-time install
+    // log so a host where the CLI failed to install can be inspected.
+    if (req.method === "POST" && url.pathname === "/api/health/opencode") {
+      const key = String(req.headers["x-health-key"] || "");
+      const expected = reviewerSid();
+      const keyOk = expected && key.length === expected.length && timingSafeEqual(Buffer.from(key), Buffer.from(expected));
+      if (!keyOk) return send(res, 404, { error: "not found" });
+      const exists = (p) => { try { return fs.existsSync(p); } catch { return false; } };
+      let log = "";
+      try { log = fs.readFileSync(path.join(ROOT, ".opencode-build.log"), "utf8").slice(-3000); } catch { /* none */ }
+      return send(res, 200, {
+        bin: opencodeBinary(),
+        cwd: process.cwd(),
+        root: ROOT,
+        candidates: {
+          "node_modules/.bin/opencode": exists(path.join(ROOT, "node_modules/.bin/opencode")),
+          "node_modules/opencode-ai/bin/opencode.exe": exists(path.join(ROOT, "node_modules/opencode-ai/bin/opencode.exe")),
+          "node_modules/opencode-linux-x64": exists(path.join(ROOT, "node_modules/opencode-linux-x64")),
+        },
+        env: { OPENCODE_BIN: process.env.OPENCODE_BIN || "", OPENCODE_API_KEY: process.env.OPENCODE_API_KEY ? "set" : "unset" },
+        log,
+      });
     }
 
     // static (never cached: the UI evolves fast during testing)
