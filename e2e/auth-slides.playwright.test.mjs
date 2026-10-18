@@ -61,7 +61,7 @@ test(`browser shows welcome, contributor setup, then verification code${HOSTED ?
   }, null, { timeout: 2000 });
   assert.ok(Math.abs(await screenTop("auth-screen-setup")) < 1, "contributor setup occupies the viewport after Começar");
   assert.ok(Math.abs((await screenTop("auth-screen-welcome")) + viewportHeight) < 1, "welcome moves exactly one viewport above setup");
-  assert.ok(Math.abs((await screenTop("auth-screen-code")) - viewportHeight) < 1, "verification stays exactly one viewport below setup");
+  assert.ok(Math.abs((await screenTop("auth-screen-code")) - 2 * viewportHeight) < 1, "verification stays exactly two viewports below setup (publication chooser between them)");
   assert.equal(await page.locator("#auth-screen-code").getAttribute("aria-hidden"), "true");
 
   await page.locator("#auth-ref").fill("writer.substack.com");
@@ -72,7 +72,7 @@ test(`browser shows welcome, contributor setup, then verification code${HOSTED ?
     return code?.getAttribute("aria-hidden") === "false" && stage?.scrollTop === 0 && Math.abs(code.getBoundingClientRect().top) < 1;
   });
   assert.ok(Math.abs(await screenTop("auth-screen-code")) < 1, "verification occupies the viewport only after requesting the code");
-  assert.ok(Math.abs((await screenTop("auth-screen-setup")) + viewportHeight) < 1, "setup moves one viewport above verification");
+  assert.ok(Math.abs((await screenTop("auth-screen-setup")) + 2 * viewportHeight) < 1, "setup moves two viewports above verification");
 
   await page.getByRole("button", { name: "Voltar à configuração" }).click();
   await page.waitForFunction(() => {

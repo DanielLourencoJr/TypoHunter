@@ -37,7 +37,7 @@ function element(id) {
 
 test("login gate presents setup and verification as sequential steps", async () => {
   const elements = new Map();
-  const authSlides = ["auth-screen-welcome", "auth-screen-setup", "auth-screen-code"].map((id) => element(id));
+  const authSlides = ["auth-screen-welcome", "auth-screen-setup", "auth-screen-pub", "auth-screen-code"].map((id) => element(id));
   authSlides.forEach((slide) => elements.set(slide.id, slide));
   const authStage = element("welcome-auth");
   authStage.querySelectorAll = (selector) => selector === ".auth-screen" ? authSlides : [];
@@ -118,7 +118,8 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.equal(get("auth-screen-setup").inert, true);
   assert.equal(get("auth-screen-welcome").style.transform, "translateY(0%)");
   assert.equal(get("auth-screen-setup").style.transform, "translateY(100%)");
-  assert.equal(get("auth-screen-code").style.transform, "translateY(200%)");
+  assert.equal(get("auth-screen-pub").style.transform, "translateY(200%)");
+  assert.equal(get("auth-screen-code").style.transform, "translateY(300%)");
   assert.match(html, /id="welcome-intro"[\s\S]*?sem copiar e colar/);
   assert.doesNotMatch(html, /auth-step-number">\d+<\/span><h2>Apresentação/, "welcome has no step number");
   assert.match(html, /auth-step-number">1<\/span><h2 id="auth-setup-title"/);
@@ -131,7 +132,8 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.equal(get("auth-screen-setup").getAttribute("aria-hidden"), "false");
   assert.equal(get("auth-screen-welcome").style.transform, "translateY(-100%)");
   assert.equal(get("auth-screen-setup").style.transform, "translateY(0%)");
-  assert.equal(get("auth-screen-code").style.transform, "translateY(100%)");
+  assert.equal(get("auth-screen-pub").style.transform, "translateY(100%)");
+  assert.equal(get("auth-screen-code").style.transform, "translateY(200%)");
   assert.notEqual(get("auth-panel-setup").style.display, "none", "contributor setup is the first step");
   assert.notEqual(get("auth-panel-code").style.display, "none", "verification follows setup on the same page");
   assert.equal(get("welcome-auth").getAttribute("data-slide"), "1", "contributor setup is active after start");
@@ -160,7 +162,7 @@ test("login gate presents setup and verification as sequential steps", async () 
   assert.ok(calls.some((call) => call.path === "/api/auth/challenge"), "setup submits a challenge request");
   const challengeCall = calls.find((call) => call.path === "/api/auth/challenge");
   assert.deepEqual(JSON.parse(challengeCall.init.body), { pub: "writer.substack.com", landing: "drafts" });
-  assert.equal(get("welcome-auth").getAttribute("data-slide"), "2", "a successful challenge advances to code entry");
+  assert.equal(get("welcome-auth").getAttribute("data-slide"), "3", "a successful challenge advances to code entry");
   assert.equal(get("auth-screen-setup").getAttribute("aria-hidden"), "true");
   assert.equal(get("auth-screen-code").getAttribute("aria-hidden"), "false");
   assert.equal(get("auth-screen-setup").inert, true);
@@ -195,10 +197,14 @@ test("login gate presents setup and verification as sequential steps", async () 
   get("auth-ref").value = resolvedInput;
   const challengesBeforeProfile = calls.filter((call) => call.path === "/api/auth/challenge").length;
   await get("auth-next").onclick();
-  assert.equal(get("auth-profile-picker").style.display, "", "profile input reveals its publication selector");
+  assert.equal(get("auth-screen-pub").getAttribute("aria-hidden"), "false", "profile input advances to the publication chooser");
+  assert.equal(get("welcome-auth").getAttribute("data-slide"), "2", "the publication chooser is its own sliding screen");
+  assert.match(get("auth-profile-list").innerHTML, /writer\.substack\.com/, "profile publications render as dashboard-style cards");
+  assert.match(get("auth-profile-list").innerHTML, /second\.substack\.com/);
+  assert.match(get("auth-profile-list").innerHTML, /publication-card selected/, "the first publication is preselected");
   assert.equal(calls.filter((call) => call.path === "/api/auth/challenge").length, challengesBeforeProfile, "profile selection happens before creating a code draft");
-  get("auth-profile-pub").value = "writer.substack.com";
-  await get("auth-next").onclick();
+  vm.runInContext("selectAuthPublication('writer.substack.com')", context);
+  await get("auth-pub-go").onclick();
   assert.deepEqual(JSON.parse(calls.filter((call) => call.path === "/api/auth/challenge").at(-1).init.body), { pub: "writer.substack.com", landing: "dashboard" });
 
   await get("auth-verify").onclick();
@@ -233,8 +239,8 @@ test("login gate presents setup and verification as sequential steps", async () 
 
   const futureSlide = element("auth-screen-future");
   authSlides.push(futureSlide);
-  vm.runInContext("setAuthSlide(3)", context);
-  assert.equal(get("welcome-auth").getAttribute("data-slide"), "3", "the slide navigator supports additional screens without CSS changes");
+  vm.runInContext("setAuthSlide(4)", context);
+  assert.equal(get("welcome-auth").getAttribute("data-slide"), "4", "the slide navigator supports additional screens without CSS changes");
   assert.equal(futureSlide.style.transform, "translateY(0%)");
   assert.equal(futureSlide.getAttribute("aria-hidden"), "false");
   assert.equal(futureSlide.inert, false);

@@ -77,7 +77,37 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 .auth-screen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-width:0;min-height:0;padding:clamp(12px,2.5vh,24px);overflow:hidden;transition:transform .5s cubic-bezier(.22,.75,.25,1)}
 .auth-dialog{width:min(620px,100%);height:100%;max-height:100%;min-height:0;overflow:auto;overscroll-behavior:contain;padding:clamp(20px,4vh,34px) clamp(18px,4vw,34px);text-align:left;display:flex;flex-direction:column;justify-content:center}
 @media (max-height:760px){.auth-dialog{justify-content:flex-start}}
-@media (max-width:520px){.auth-screen{padding:8px}.auth-dialog{padding:22px 18px;border-radius:14px}.auth-form-row{flex-wrap:wrap}.auth-form-row input,.auth-form-row button{width:100%}}
+@media (max-width:520px){
+  .auth-screen{padding:6px}
+  .auth-dialog{padding:14px 14px;border-radius:14px}
+  .auth-dialog>p:first-child,.auth-setup-hint,.auth-code-note{display:none}
+  .auth-dialog>h1{font-size:19px;margin:2px 0 6px}
+  .auth-step{padding:11px 0 2px;margin-top:9px}
+  .auth-step-heading{margin-bottom:5px}
+  .auth-step-heading h2{font-size:15px}
+  .auth-step-number{width:24px;height:24px;font-size:12px}
+  .auth-step>p{margin:0 0 7px}
+  .auth-instructions{padding:6px 11px;margin:7px 0 10px}
+  .auth-instructions ol{padding-left:17px}
+  .auth-instructions li{padding:1px 0;line-height:1.35;font-size:13.5px}
+  .auth-label{margin:9px 0 4px}
+  .auth-form-row{flex-wrap:wrap}
+  .auth-form-row input,.auth-form-row button{width:100%}
+  .auth-footer{margin-top:8px;padding-top:8px}
+  .auth-pub-grid{gap:7px;margin-top:7px}
+  .auth-pub-grid .publication-card{padding:9px;gap:10px;border-radius:12px}
+  .auth-pub-grid .publication-card-logo{width:42px;height:42px;font-size:17px;border-radius:10px}
+}
+@media (max-width:380px){
+  .auth-dialog{padding:12px}
+  .auth-step{padding-top:9px;margin-top:7px}
+  .auth-step>p{margin:0 0 5px}
+  .auth-instructions{margin:6px 0 8px}
+  .auth-label{margin:7px 0 3px}
+  .auth-form-row{flex-wrap:nowrap}
+  .auth-form-row input{width:auto;min-width:0}
+  .auth-form-row button{width:auto;flex:none;padding:8px 10px;font-size:13px}
+}
 @media (prefers-reduced-motion:reduce){.auth-screen{transition:none}}
 .auth-dialog>p:first-child,.auth-dialog>h1{text-align:center}
 .welcome-intro{max-width:560px;text-align:center}
@@ -109,6 +139,7 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 .publication-status{flex:none;border-radius:999px;padding:5px 9px;font:650 11px var(--font-ui);white-space:nowrap}
 .publication-status.verified{background:var(--green-bg);color:var(--green)}
 .publication-status.pending{background:var(--accent-bg);color:var(--accent)}
+.publication-card.selected{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent)}
 /* tutorial mock window */
 .mock{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:10px 0;font-family:var(--font-ui);font-size:13px}
 .mockbar{background:var(--soft);padding:6px 12px;color:var(--muted);border-bottom:1px solid var(--line)}
@@ -530,7 +561,7 @@ a { color: var(--accent); }
         <h1 class="font-text">TypoHunter</h1>
         <section class="auth-step" id="auth-panel-setup" aria-labelledby="auth-setup-title">
           <div class="auth-step-heading"><span class="auth-step-number">1</span><h2 id="auth-setup-title">Adicione a conta revisora</h2></div>
-          <p class="hint">Convide a conta como contribuidora da publicação para permitir a leitura dos rascunhos.</p>
+          <p class="hint auth-setup-hint">Convide a conta como contribuidora da publicação para permitir a leitura dos rascunhos.</p>
           <div class="auth-instructions">
             <ol>
               <li>No Substack, abra <strong>Settings → Team → Invite</strong>.</li>
@@ -543,11 +574,6 @@ a { color: var(--accent); }
             <input id="auth-ref" type="text" placeholder="https://voce.substack.com ou @voce" autocomplete="url" />
             <button id="auth-next" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Solicitar código</button>
           </div>
-          <div id="auth-profile-picker" style="display:none;margin-top:12px">
-            <label class="auth-label" for="auth-profile-pub">Publicações deste perfil</label>
-            <select id="auth-profile-pub" style="width:100%"></select>
-            <p class="hint">Cada publicação exige seu próprio código de verificação.</p>
-          </div>
           <p id="auth-setup-status" class="hint"></p>
           <div class="err" id="err-auth-setup"></div>
         </section>
@@ -558,7 +584,26 @@ a { color: var(--accent); }
         </div>
       </div>
     </section>
-    <section class="auth-screen" id="auth-screen-code" aria-label="Etapa 2: inserir código" aria-hidden="true" inert style="transform:translateY(200%)">
+    <section class="auth-screen" id="auth-screen-pub" aria-label="Escolha a publicação" aria-hidden="true" inert style="transform:translateY(200%)">
+      <div class="dialog auth-dialog ring-1 ring-black/5 dark:ring-white/10">
+        <p class="font-ui text-xs uppercase tracking-widest opacity-60">Substack · revisão de texto</p>
+        <h1 class="font-text">TypoHunter</h1>
+        <section class="auth-step" id="auth-panel-pub" aria-labelledby="auth-pub-title">
+          <div class="auth-step-heading"><span class="auth-step-number">1</span><h2 id="auth-pub-title">Escolha a publicação</h2></div>
+          <p class="hint">Este perfil tem mais de uma publicação. Cada uma exige seu próprio código de verificação.</p>
+          <div id="auth-profile-list" class="publication-grid auth-pub-grid" role="listbox" aria-label="Publicações deste perfil"></div>
+          <p id="auth-pub-status" class="hint"></p>
+          <div class="err" id="err-auth-pub"></div>
+        </section>
+        <div class="auth-footer">
+          <button id="auth-pub-back" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">← Voltar</button>
+          <span class="spacer"></span>
+          <button id="auth-pub-theme" class="font-ui text-xs rounded-lg px-3 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition">Tema: escuro</button>
+          <button id="auth-pub-go" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Ir para o código</button>
+        </div>
+      </div>
+    </section>
+    <section class="auth-screen" id="auth-screen-code" aria-label="Etapa 2: inserir código" aria-hidden="true" inert style="transform:translateY(300%)">
       <div class="dialog auth-dialog ring-1 ring-black/5 dark:ring-white/10">
         <p class="font-ui text-xs uppercase tracking-widest opacity-60">Substack · revisão de texto</p>
         <h1 class="font-text">TypoHunter</h1>
@@ -570,7 +615,7 @@ a { color: var(--accent); }
             <input id="auth-code" type="text" placeholder="Código de verificação" autocomplete="one-time-code" autocapitalize="characters" />
             <button id="auth-verify" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Entrar</button>
           </div>
-          <p class="hint">A resposta será a mesma se o código estiver incorreto, expirado ou se o rascunho ainda não estiver disponível.</p>
+          <p class="hint auth-code-note">A resposta será a mesma se o código estiver incorreto, expirado ou se o rascunho ainda não estiver disponível.</p>
           <div class="err" id="err-auth-code"></div>
         </section>
         <div class="auth-footer">
@@ -610,7 +655,7 @@ function toggleTheme() {
   try { localStorage.setItem('th_theme', next); } catch {}
   paintThemeBtn();
 }
-const S = { ref: null, profileRef: null, pendingPub: '', returningAuth: null, pub: '', auth: null, posts: null, cur: null, decisions: {}, groupDeselect: new Set(), editorUrl: null, isPublished: false, lastApplied: 0, admin: null };
+const S = { ref: null, profileRef: null, pendingPub: '', returningAuth: null, pub: '', auth: null, posts: null, cur: null, decisions: {}, groupDeselect: new Set(), editorUrl: null, isPublished: false, lastApplied: 0, admin: null, authPick: '', authPubOptions: [] };
 function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = 'pill' + (cls ? ' ' + cls : ''); }
 function showErr(m, where) { const el = $(where); if (el) { el.style.display = 'block'; el.textContent = m; } setStatus('erro', 'err'); }
 function clearErrs() { document.querySelectorAll('.err').forEach(e => { e.style.display = 'none'; e.textContent = ''; }); }
@@ -906,8 +951,11 @@ function focusWelcomeScreen() {
   setAuthSlide(0);
 }
 function focusVerificationStep() {
-  setAuthSlide(2);
+  setAuthSlide(3);
   $('auth-code').focus({ preventScroll: true });
+}
+function focusPublicationStep() {
+  setAuthSlide(2);
 }
 function focusSetupStep() {
   setAuthSlide(1);
@@ -954,9 +1002,41 @@ function profileInputMatches(input, handle) {
   const wwwProfilePath = `www.${profilePath}`;
   return value === `@${handle}` || value === profilePath || value.startsWith(`${profilePath}/`) || value === wwwProfilePath || value.startsWith(`${wwwProfilePath}/`);
 }
-function setPublicationOptions(select, publications, selectedHost) {
-  select.innerHTML = publications.map((pub) => `<option value="${esc(pub.host)}">${esc(pub.name)} · ${esc(pub.host)}</option>`).join("");
-  if (selectedHost && publications.some((pub) => pub.host === selectedHost)) select.value = selectedHost;
+function authPublicationCard(pub, selected) {
+  const name = pub.name || pub.host;
+  const initial = esc(Array.from(name)[0] || '•').toUpperCase();
+  const logo = pub.image ? `<img src="${esc(pub.image)}" alt="" loading="lazy" />` : '';
+  return `<button type="button" class="publication-card${selected ? ' selected' : ''}" data-pub="${esc(pub.host)}" role="option" aria-selected="${selected ? 'true' : 'false'}">` +
+    `<span class="publication-card-logo" aria-hidden="true"><span>${initial}</span>${logo}</span>` +
+    `<span class="publication-card-copy"><span class="publication-card-name">${esc(name)}</span><span class="publication-card-host">${esc(pub.host)}</span></span>` +
+    `<span class="publication-status ${selected ? 'verified' : 'pending'}">${selected ? 'Selecionada' : 'Selecionar'}</span>` +
+    `</button>`;
+}
+function renderAuthPublications(publications, selectedHost) {
+  S.authPubOptions = publications || [];
+  S.authPick = selectedHost && S.authPubOptions.some((pub) => pub.host === selectedHost) ? selectedHost : '';
+  const box = $('auth-profile-list');
+  box.innerHTML = S.authPubOptions.map((pub) => authPublicationCard(pub, pub.host === S.authPick)).join('');
+  box.onclick = (event) => {
+    const btn = event.target && event.target.closest ? event.target.closest('[data-pub]') : null;
+    if (btn) selectAuthPublication(btn.dataset.pub);
+  };
+}
+function selectAuthPublication(host) {
+  if (!S.authPubOptions.some((pub) => pub.host === host)) return;
+  renderAuthPublications(S.authPubOptions, host);
+}
+async function startChallenge(ref, pub, landing) {
+  S.ref = ref;
+  S.pub = pub;
+  try { localStorage.setItem('th_ref', JSON.stringify(ref)); } catch {}
+  const r = await apiFetch('/api/auth/challenge', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pub, landing }),
+  });
+  if (!r.ok) throw new Error('Não foi possível iniciar a verificação. Tente novamente.');
+  $('auth-setup-status').textContent = 'Seus rascunhos podem conter um rascunho temporário do TypoHunter com o código. O código é necessário na próxima etapa.';
+  focusVerificationStep();
 }
 async function requestVerificationDraft() {
   clearErrs();
@@ -965,51 +1045,44 @@ async function requestVerificationDraft() {
   $('auth-next').disabled = true;
   $('auth-setup-status').textContent = 'Preparando a verificação…';
   try {
-    let ref, pub, landing;
     if (S.pendingPub) {
-      ref = S.profileRef;
-      pub = S.pendingPub;
-      landing = 'dashboard';
-    } else if (S.profileRef && profileInputMatches(input, S.profileRef.handle)) {
-      ref = S.profileRef;
-      pub = $('auth-profile-pub').value;
-      landing = 'dashboard';
-    } else {
-      S.profileRef = null;
-      $('auth-profile-picker').style.display = 'none';
-      const resolved = await apiFetch('/api/resolve?input=' + encodeURIComponent(input));
-      ref = await resolved.json();
-      if (!resolved.ok || ref.error) throw new Error('Não encontramos esse perfil ou publicação. Confira o link e tente novamente.');
-      if (ref.kind === 'profile') {
-        if (!Array.isArray(ref.publications) || !ref.publications.length) throw new Error('Não encontramos publicações públicas nesse perfil. Informe o link direto da publicação.');
-        S.profileRef = ref;
-        S.ref = ref;
-        try { localStorage.setItem('th_ref', JSON.stringify(ref)); } catch {}
-        setPublicationOptions($('auth-profile-pub'), ref.publications, ref.publications[0].host);
-        $('auth-profile-picker').style.display = '';
-        $('auth-next').textContent = 'Ir para o código';
-        $('auth-setup-status').textContent = 'Selecione uma publicação para verificar o acesso.';
-        return;
-      }
-      pub = ref.host;
-      landing = 'drafts';
+      return await startChallenge(S.profileRef, S.pendingPub, 'dashboard');
     }
-    if (!pub) throw new Error('Selecione uma publicação para continuar.');
+    const resolved = await apiFetch('/api/resolve?input=' + encodeURIComponent(input));
+    const ref = await resolved.json();
+    if (!resolved.ok || ref.error) throw new Error('Não encontramos esse perfil ou publicação. Confira o link e tente novamente.');
     S.ref = ref;
-    S.pub = pub;
-    $('auth-profile-picker').style.display = 'none';
-    try { localStorage.setItem('th_ref', JSON.stringify(ref)); } catch {}
-    const r = await apiFetch('/api/auth/challenge', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pub, landing }),
-    });
-    if (!r.ok) throw new Error('Não foi possível iniciar a verificação. Tente novamente.');
-    $('auth-setup-status').textContent = 'Seus rascunhos podem conter um rascunho temporário do TypoHunter com o código. O código é necessário na próxima etapa.';
-    focusVerificationStep();
+    if (ref.kind === 'profile') {
+      if (!Array.isArray(ref.publications) || !ref.publications.length) throw new Error('Não encontramos publicações públicas nesse perfil. Informe o link direto da publicação.');
+      S.profileRef = ref;
+      try { localStorage.setItem('th_ref', JSON.stringify(ref)); } catch {}
+      renderAuthPublications(ref.publications, ref.publications[0].host);
+      $('auth-pub-status').textContent = '';
+      $('auth-setup-status').textContent = '';
+      focusPublicationStep();
+      return;
+    }
+    S.profileRef = null;
+    S.authPick = '';
+    await startChallenge(ref, ref.host, 'drafts');
   } catch (e) {
     showErr(e.message, 'err-auth-setup');
     $('auth-setup-status').textContent = '';
   } finally { $('auth-next').disabled = false; }
+}
+async function submitPublicationChoice() {
+  clearErrs();
+  const pub = S.authPick || (S.profileRef && S.profileRef.publications[0] && S.profileRef.publications[0].host);
+  if (!pub) { showErr('Selecione uma publicação para continuar.', 'err-auth-pub'); return; }
+  $('auth-pub-go').disabled = true;
+  $('auth-pub-status').textContent = 'Preparando a verificação…';
+  try {
+    await startChallenge(S.profileRef, pub, 'dashboard');
+    $('auth-pub-status').textContent = '';
+  } catch (e) {
+    showErr(e.message, 'err-auth-pub');
+    $('auth-pub-status').textContent = '';
+  } finally { $('auth-pub-go').disabled = false; }
 }
 async function verifyLoginCode() {
   clearErrs();
@@ -1052,8 +1125,11 @@ $('auth-back').onclick = () => {
   if (S.returningAuth) return;
   focusWelcomeScreen();
 };
-$('auth-prev-step').onclick = returnToSetup;
+$('auth-prev-step').onclick = () => (S.profileRef ? focusPublicationStep() : returnToSetup());
+$('auth-pub-back').onclick = returnToSetup;
+$('auth-pub-go').onclick = submitPublicationChoice;
 $('w-theme').onclick = toggleTheme;
+$('auth-pub-theme').onclick = toggleTheme;
 $('auth-next').onclick = requestVerificationDraft;
 $('auth-ref').addEventListener('keydown', (e) => { if (e.key === 'Enter') requestVerificationDraft(); });
 $('auth-verify').onclick = verifyLoginCode;
@@ -1237,7 +1313,7 @@ async function openProfilePublication(host) {
   S.pendingPub = pub.host;
   S.returningAuth = S.auth;
   $('auth-ref').value = pub.host;
-  $('auth-profile-picker').style.display = 'none';
+  S.authPick = '';
   $('auth-setup-status').textContent = 'Adicione a conta revisora a esta publicação e depois solicite o código.';
   showLoginGate();
 }
