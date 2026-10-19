@@ -624,6 +624,35 @@ export async function pipelineProbe({ providers, language = "pt", only = "", sam
   };
 }
 
+// Deployment self-test for the undocumented editor-version endpoints: find a
+// draft the reviewer can see that has editor history, list it, and load the
+// newest snapshot (read-only) to prove the `version_key` contract. Restore is
+// NEVER exercised here.
+export async function versionsProbe({ pub, sid } = {}) {
+  const host = publicationHost(pub || process.env.SMOKE_PUB);
+  if (!host) return { ok: false, reason: "SMOKE_PUB not configured" };
+  const useSid = sid || reviewerSid();
+  const list = await listDrafts({ sid: useSid, publicationUrl: host, limit: 10 });
+  const ids = (Array.isArray(list) ? list : (list?.posts || [])).map((p) => String(p.id));
+  for (const id of ids) {
+    let raw;
+    try { raw = await listVersions({ sid: useSid, publicationUrl: host, id }); }
+    catch { continue; }
+    const contents = Array.isArray(raw?.versions?.contents) ? raw.versions.contents : [];
+    if (!contents.length) continue;
+    const loaded = await loadVersion({ sid: useSid, publicationUrl: host, id, versionKey: contents[0].Key });
+    let doc = loaded?.version;
+    if (typeof doc === "string") { try { doc = JSON.parse(doc); } catch { /* not json */ } }
+    return {
+      ok: true, pub: host, id,
+      versionCount: contents.length,
+      loaded: doc?.type === "doc",
+      sanitized: sanitizeVersions(raw).items.length,
+    };
+  }
+  return { ok: false, reason: "no draft exposes editor history to the reviewer", pub: host, scanned: ids.length };
+}
+
 const server = http.createServer(async (req, res) => {  try {
     const url = new URL(req.url, "http://localhost");
     if (req.method === "GET" && url.pathname === "/api/auth/session") {
@@ -789,6 +818,23 @@ const server = http.createServer(async (req, res) => {  try {
       const language = typeof body.language === "string" ? body.language : "pt";
       try {
         const out = await pipelineProbe({ only, language });
+        return send(res, out.ok ? 200 : 409, { ...out, commit: process.env.RENDER_GIT_COMMIT || "dev" });
+      } catch (e) {
+        return send(res, 502, { ok: false, error: String(e.message || e).slice(0, 300) });
+      }
+    }
+
+    // Deployment version-history self-test: proves the reviewer can list editor
+    // snapshots and read one (the `version_key` contract) without restoring.
+    // Gated by the reviewer SID; used by `npm run verify:hosted -- --versions`.
+    if (req.method === "POST" && url.pathname === "/api/health/versions") {
+      const key = String(req.headers["x-health-key"] || "");
+      const expected = reviewerSid();
+      const keyOk = expected && key.length === expected.length && timingSafeEqual(Buffer.from(key), Buffer.from(expected));
+      if (!keyOk) return send(res, 404, { error: "not found" });
+      const body = await readJson(req);
+      try {
+        const out = await versionsProbe({ pub: body.pub, sid: expected });
         return send(res, out.ok ? 200 : 409, { ...out, commit: process.env.RENDER_GIT_COMMIT || "dev" });
       } catch (e) {
         return send(res, 502, { ok: false, error: String(e.message || e).slice(0, 300) });

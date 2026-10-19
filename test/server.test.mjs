@@ -4,7 +4,7 @@ import {
   snapOf, sameSnap, snapOfVersion, latestMarkdown, editionParam, editionMarkdown,
   blankEdStore, migrateStore, edStore, pubsFromProfile,
   sidFrom, reviewerSid, pubFrom, readJson, send,
-  enqueueAnalysis, queueAhead, jobEtaSec, jobs, pipelineProbe, sanitizeVersions,
+  enqueueAnalysis, queueAhead, jobEtaSec, jobs, pipelineProbe, sanitizeVersions, versionsProbe,
 } from "../server.js";
 import { geminiProvider } from "../lib/llm.js";
 
@@ -383,5 +383,42 @@ test("restoreVersion: refuses a published draft", async () => {
       () => restoreVersion({ sid: "s", publicationUrl: "https://ex.substack.com", id: 5, versionKey: "k" }),
       /unpublished/,
     );
+  } finally { globalThis.fetch = orig; }
+});
+
+test("versionsProbe: reads the newest snapshot without restoring", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, opts = {}) => {
+    const u = String(url);
+    if (u.includes("/post_management/drafts")) return new Response(JSON.stringify({ posts: [{ id: 7 }] }), { status: 200 });
+    if (u.includes("/versions")) return new Response(JSON.stringify({ contentId: "post/7/cur", versions: { contents: [{ Key: "post/7/cur", LastModified: "2026-10-19T00:00:00.000Z", Size: 9, user: { id: 1, name: "N", email: "x@y.z" } }], previousBucket: null } }), { status: 200 });
+    if (u.endsWith("/load_version")) {
+      assert.equal(JSON.parse(opts.body).version_key, "post/7/cur");
+      return new Response(JSON.stringify({ version: JSON.stringify(DOC), contentId: "post/7/cur" }), { status: 200 });
+    }
+    return new Response("{}", { status: 200 });
+  };
+  try {
+    const out = await versionsProbe({ pub: "ex.substack.com" });
+    assert.equal(out.ok, true);
+    assert.equal(out.id, "7");
+    assert.equal(out.versionCount, 1);
+    assert.equal(out.loaded, true);
+    assert.equal(out.sanitized, 1);
+    assert.ok(!JSON.stringify(out).includes("x@y.z"));
+  } finally { globalThis.fetch = orig; }
+});
+
+test("versionsProbe: reports when no draft exposes editor history", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("/post_management/drafts")) return new Response(JSON.stringify({ posts: [{ id: 7 }] }), { status: 200 });
+    return new Response(JSON.stringify({ error: "no content" }), { status: 400 });
+  };
+  try {
+    const out = await versionsProbe({ pub: "ex.substack.com" });
+    assert.equal(out.ok, false);
+    assert.equal(out.scanned, 1);
   } finally { globalThis.fetch = orig; }
 });

@@ -87,9 +87,12 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   pipeline (`pipelineProbe`: ordered providers → prompt → `proofreadText` →
   `filterSuggestions`) on a fixed one-typo sample and reports which
   provider/model served it — pass `{only:"opencode"}` to prove a specific
-  provider, not just failover. `npm run verify:hosted [-- --deep]
-  [--pipeline [--only <name>]]` checks these from anywhere (Substack calls
-  happen server-side; both client flags need only `REVIEWER_SID` locally).
+  provider, not just failover. `POST /api/health/versions` (same gate) runs
+  `versionsProbe`: it lists a draft's editor snapshots and loads the newest one
+  read-only to prove the `version_key` contract (never restores).
+  `npm run verify:hosted [-- --deep] [--pipeline [--only <name>]]
+  [--versions]` checks these from anywhere (Substack calls happen server-side;
+  the client flags need only `REVIEWER_SID` locally).
   Publishing to the live page is done in the Substack editor — server-side
   republish is intentionally off (Substack gates it behind a fresh sign-in).
   Verification drafts expire after 15 minutes and are removed on successful

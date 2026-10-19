@@ -10,6 +10,7 @@
 //   node scripts/verify-hosted.mjs --url ... --deep      # needs REVIEWER_SID
 //   node scripts/verify-hosted.mjs --url ... --pipeline  # needs REVIEWER_SID
 //   node scripts/verify-hosted.mjs --url ... --pipeline --only opencode
+//   node scripts/verify-hosted.mjs --url ... --versions  # needs REVIEWER_SID
 //
 // Exit code is non-zero if any check fails. Never prints secrets.
 
@@ -32,6 +33,7 @@ const url = String(opt("--url", process.env.HOSTED_URL || "https://typohunter.on
 const expectCommit = String(opt("--expect-commit", ""));
 const deep = flag("--deep");
 const pipeline = flag("--pipeline");
+const versions = flag("--versions");
 const only = String(opt("--only", ""));
 
 let failures = 0;
@@ -100,6 +102,26 @@ async function main() {
         else if (!body.suggestionCount) fail("pipeline returned no suggestions for the known-typo sample");
       } else {
         fail(`pipeline check failed (HTTP ${r.status}${body.error ? `: ${body.error}` : body.reason ? `: ${body.reason}` : ""})`);
+      }
+    }
+  }
+
+  if (versions) {
+    const key = process.env.REVIEWER_SID || "";
+    if (!key) {
+      fail("--versions needs REVIEWER_SID in .env");
+    } else {
+      const r = await fetch(`${url}/api/health/versions`, {
+        method: "POST",
+        headers: { "x-health-key": key, "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.status === 200 && body.ok) {
+        pass(`editor history: ${body.versionCount} version(s) on draft ${body.id} (loaded=${body.loaded}, sanitized=${body.sanitized})`);
+        if (!body.loaded) fail("version body did not load as a tiptap doc");
+      } else {
+        fail(`version-history check failed (HTTP ${r.status}${body.error ? `: ${body.error}` : body.reason ? `: ${body.reason}` : ""})`);
       }
     }
   }
