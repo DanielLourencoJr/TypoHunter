@@ -1487,7 +1487,7 @@ async function openHistory(id, edition, adminHost) {
     setStatus('pronto');
     return;
   }
-  S.cur = { id, edition: edition || 'original', sugs: null, sugState: 'idle', editorUrl: null, isPublished: false, translations: [] };
+  S.cur = { id, edition: edition || 'original', sugs: null, sugState: 'idle', editorUrl: null, isPublished: false, translations: [], coverFallback: libCover(id) };
   S.decisions = {};
   S.groupDeselect.clear();
   showView('history');
@@ -1506,12 +1506,21 @@ async function openHistory(id, edition, adminHost) {
     setStatus('pronto');
   } catch (e) { showErr(e.message, 'err-hist'); }
 }
+function libCover(id) {
+  const list = [...(S.posts?.drafts || []), ...(S.posts?.published || [])];
+  const p = list.find((x) => String(x.id) === String(id));
+  return (p && p.cover) || null;
+}
 function renderHistory(j) {
   const st = S.cur.store;
   $('h-title').textContent = ' ' + (j.title || '#' + S.cur.id);
   const cover = $('h-cover');
-  cover.style.display = j.cover ? '' : 'none';
-  if (j.cover) cover.src = j.cover;
+  // The draft payload omits cover_image for many published posts, while the
+  // library card (from the published list) still has it — fall back to that so
+  // the header banner is not empty just because getDraft dropped the cover.
+  const coverSrc = j.cover || (S.cur && S.cur.coverFallback) || null;
+  cover.style.display = coverSrc ? '' : 'none';
+  if (coverSrc) cover.src = coverSrc;
   const tabs = S.cur.translations.length
     ? `<button class="${S.cur.edition === 'original' ? 'active' : 'font-ui text-sm rounded-lg px-3 py-1.5 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition'}" data-ed="original">Original</button>` +
       S.cur.translations.map(t => `<button class="${S.cur.edition === t.language ? 'active' : 'font-ui text-sm rounded-lg px-3 py-1.5 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition'}" data-ed="${t.language}">${esc(t.language.toUpperCase())}</button>`).join('')

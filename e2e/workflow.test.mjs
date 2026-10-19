@@ -137,7 +137,7 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
     }
     if (url.pathname === "/api/v1/post_management/drafts") {
       if (!reviewerCanAccess) return response({ error: "not a contributor" }, 403);
-      const posts = [{ id: Number(draftId), draft_title: remoteDraft.draft_title, audience: "everyone" }];
+      const posts = [{ id: Number(draftId), draft_title: remoteDraft.draft_title, audience: "everyone", cover_image: "https://cdn.example.test/draft-cover.png" }];
       if (challengeDraft) posts.unshift({ id: challengeDraft.id, draft_title: challengeDraft.draft_title, audience: "everyone" });
       return response({ posts, total: posts.length });
     }
@@ -316,6 +316,8 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   await vm.runInContext(`openHistory('${draftId}')`, context);
   await waitFor(() => vm.runInContext("S.cur?.sugState === 'ready'", context), "proofread suggestions");
   assert.equal(vm.runInContext("S.cur.sugs.length", context), 2);
+  assert.equal(elements.get("h-cover").src, "https://cdn.example.test/draft-cover.png", "history header falls back to the library card cover when the draft payload omits it");
+  assert.equal(elements.get("h-cover").style.display, "", "the cover banner is shown");
 
   vm.runInContext("renderReview(false); showView('review')", context);
   assert.match(elements.get("rv-doc").innerHTML, /data-toggle-change="h1"/);
