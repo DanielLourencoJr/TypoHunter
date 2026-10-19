@@ -808,47 +808,61 @@ const server = http.createServer(async (req, res) => {  try {
       if (!pub) return send(res, 409, { error: "no pub (set SMOKE_PUB or pass pub)" });
       const base = `https://${pub}/api/v1`;
       const hdr = { Cookie: `substack.sid=${expected}`, "Content-Type": "application/json", "User-Agent": "Mozilla/5.0" };
-      const probe = async (path) => {
+      const getText = async (path) => {
         try {
           const r = await fetch(`${base}${path}`, { headers: hdr });
           const t = await r.text();
-          let keys = null;
-          try { keys = Object.keys(JSON.parse(t)).slice(0, 12); } catch { /* not json */ }
-          return { path: path.split("?")[0], status: r.status, ct: (r.headers.get("content-type") || "").split(";")[0], len: t.length, keys, head: t.slice(0, 90) };
-        } catch (e) { return { path: path.split("?")[0], error: String(e.message || e).slice(0, 120) }; }
+          let json = null;
+          try { json = JSON.parse(t); } catch { /* not json */ }
+          return { path, status: r.status, ct: (r.headers.get("content-type") || "").split(";")[0], len: t.length, json, head: t.slice(0, 90) };
+        } catch (e) { return { path, error: String(e.message || e).slice(0, 140) }; }
       };
-      const out = { pub, steps: [] };
+      const out = { pub, scans: [], content: [] };
       try {
-        let id = body.id ? String(body.id) : "";
-        if (!id) {
-          const j = await fetch(`${base}/drafts?limit=5`, { headers: hdr }).then((r) => r.json()).catch(() => null);
-          const posts = Array.isArray(j) ? j : (j?.posts || []);
-          out.drafts = posts.length;
-          if (posts[0]) id = String(posts[0].id);
+        let ids = [];
+        if (body.id) ids = [String(body.id)];
+        else {
+          const d = await getText("/drafts?limit=10");
+          const dp = Array.isArray(d.json) ? d.json : (d.json?.posts || []);
+          out.drafts = dp.length;
+          ids.push(...dp.map((p) => String(p.id)));
+          const p = await getText("/post_management/published?offset=0&limit=5&order_by=post_date&order_direction=desc");
+          const pp = p.json?.posts || [];
+          out.published = pp.length;
+          ids.push(...pp.map((x) => String(x.id)));
         }
-        if (!id) return send(res, 200, { ...out, error: "no accessible draft id; pass id" });
-        out.id = id;
-        const raw = await fetch(`${base}/drafts/${id}/versions?bucket`, { headers: hdr }).then((r) => r.json()).catch(() => null);
-        const vkey = body.key || raw?.versions?.contents?.[0]?.Key || "";
-        out.versionCount = raw?.versions?.contents?.length ?? null;
-        out.previousBucket = raw?.versions?.previousBucket ?? null;
-        out.publishedContentKey = raw?.publishedContentKey ?? null;
-        if (!vkey) return send(res, 200, { ...out, error: "no version key" });
+        ids = [...new Set(ids)].slice(0, 15);
+        out.ids = ids;
+        let chosen = null;
+        let vkey = body.key || "";
+        for (const id of ids) {
+          const v = await getText(`/drafts/${id}/versions?bucket`);
+          const contents = Array.isArray(v.json?.versions?.contents) ? v.json.versions.contents : [];
+          out.scans.push({ id, status: v.status, count: contents.length, contentId: v.json?.contentId || null, prev: v.json?.versions?.previousBucket ?? null, keys: v.json ? Object.keys(v.json).slice(0, 8) : null, head: v.head });
+          if (!chosen && contents.length) { chosen = id; if (!vkey) vkey = contents[0].Key; }
+        }
+        if (!chosen) return send(res, 200, { ...out, error: "no draft/post exposes editor history to the reviewer" });
+        out.id = chosen;
+        out.hasKey = Boolean(vkey);
+        if (!vkey) return send(res, 200, out);
         const enc = encodeURIComponent(vkey);
         const candidates = [
-          `/drafts/${id}/versions/${enc}`,
-          `/drafts/${id}/versions/${vkey}`,
-          `/drafts/${id}/versions/${enc}/content`,
-          `/drafts/${id}/versions/content?key=${enc}`,
-          `/drafts/${id}/versions/content?contentId=${enc}`,
-          `/drafts/${id}/versions/content?id=${enc}`,
-          `/drafts/${id}/versions?key=${enc}`,
-          `/drafts/${id}/versions?contentId=${enc}`,
-          `/drafts/${id}/content?key=${enc}`,
-          `/drafts/${id}/version/${enc}`,
+          `/drafts/${chosen}/versions/${enc}`,
+          `/drafts/${chosen}/versions/${vkey}`,
+          `/drafts/${chosen}/versions/${enc}/content`,
+          `/drafts/${chosen}/versions/content?key=${enc}`,
+          `/drafts/${chosen}/versions/content?contentId=${enc}`,
+          `/drafts/${chosen}/versions/content?id=${enc}`,
+          `/drafts/${chosen}/versions?key=${enc}`,
+          `/drafts/${chosen}/versions?contentId=${enc}`,
+          `/drafts/${chosen}/content?key=${enc}`,
+          `/drafts/${chosen}/version/${enc}`,
           `/content/${enc}`,
         ];
-        for (const p of candidates) out.steps.push(await probe(p));
+        for (const cp of candidates) {
+          const r = await getText(cp);
+          out.content.push({ path: cp.split("?")[0], status: r.status, ct: r.ct, len: r.len, keys: r.json ? Object.keys(r.json).slice(0, 8) : null, head: r.head });
+        }
         return send(res, 200, out);
       } catch (e) {
         return send(res, 502, { ...out, error: String(e.message || e).slice(0, 300) });
