@@ -109,6 +109,14 @@ function pubFrom(req, body, query) {
   return "";
 }
 
+// Substack editor version history is parked behind a flag, default OFF: the
+// endpoints are undocumented and pagination plus the header cover are still
+// open. Flip SUBSTACK_HISTORY=1 to expose it; when off, the UI falls back to
+// the local version list and the version routes answer as if absent.
+function historyEnabled() {
+  return /^(1|true|on|yes)$/i.test(String(process.env.SUBSTACK_HISTORY || ""));
+}
+
 function authStatePath() {
   return process.env.AUTH_STATE_PATH || path.join(DATA, "auth-state.json");
 }
@@ -1158,8 +1166,10 @@ const server = http.createServer(async (req, res) => {  try {
       // the local store on ephemeral hosting. Null when unavailable, so the
       // UI falls back to the local version list.
       let versions = null;
-      try { versions = sanitizeVersions(await listVersions({ sid, publicationUrl: pub, id })); }
-      catch { /* fall back to local store versions */ }
+      if (historyEnabled()) {
+        try { versions = sanitizeVersions(await listVersions({ sid, publicationUrl: pub, id })); }
+        catch { /* fall back to local store versions */ }
+      }
       return send(res, 200, {
         id,
         edition,
@@ -1178,6 +1188,7 @@ const server = http.createServer(async (req, res) => {  try {
     // preview one Substack editor version (read-only): returns its markdown.
     const mVC = url.pathname.match(/^\/api\/posts\/(\d+)\/versions\/content$/);
     if (req.method === "GET" && mVC) {
+      if (!historyEnabled()) return send(res, 404, { error: "not found" });
       const sid = sidFrom(req);
       const pub = pubFrom(req, null, url.searchParams);
       if (!sid) return send(res, 401, { error: "missing SID" });
@@ -1196,6 +1207,7 @@ const server = http.createServer(async (req, res) => {  try {
     // restore an unpublished draft to one editor version (original edition only).
     const mVR = url.pathname.match(/^\/api\/posts\/(\d+)\/versions\/restore$/);
     if (req.method === "POST" && mVR) {
+      if (!historyEnabled()) return send(res, 404, { error: "not found" });
       const body = await readJson(req);
       const sid = sidFrom(req);
       const pub = pubFrom(req, body, url.searchParams);
@@ -1517,7 +1529,7 @@ if (isDirectRun()) {
 export {
   recordUsage, loadEnv, envFresh, sidFrom, reviewerSid, pubFrom, pubsFromProfile,
   authStatePath, runAuthCleanup,
-  feedTitle, resolveSubstackRef, publicationRef, send, readJson,
+  feedTitle, resolveSubstackRef, publicationRef, send, readJson, historyEnabled,
   storePath, loadStore, saveStore, latestMarkdown,
   snapOf, sameSnap, snapOfVersion, editionParam, editionMarkdown,
   blankEdStore, migrateStore, edStore,

@@ -134,6 +134,10 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   leaks author emails → always `sanitizeVersions` before it reaches the client.
   Drafts with no stored content 400 the list call; that is caught and the UI
   falls back to the local list.
+- Editor version history is parked behind `SUBSTACK_HISTORY` (default off;
+  `render.yaml` sets it to `0`). When off, `GET /api/posts/:id` omits `versions`
+  and the content/restore routes 404, so the UI falls back to the local list.
+  The gated `POST /api/health/versions` probe stays available either way.
 - `PUT /drafts` carries no `translations` field, so other language editions survive
   (verified live). Translation push uses `translateDraft`, which Substack rejects
   on published posts — UI disables it there.

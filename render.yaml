@@ -17,6 +17,9 @@ services:
         value: production
       - key: LLM_ORDER
         value: gemini,groq
+      # Substack editor version history is parked (undocumented endpoints). Off.
+      - key: SUBSTACK_HISTORY
+        value: "0"
       - key: REVIEWER_EMAIL
         value: substack.proofreader@proton.me
       - key: REVIEWER_SID

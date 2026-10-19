@@ -9,7 +9,7 @@ import { server, storePath, runAuthCleanup } from "../server.js";
 
 const realFetch = globalThis.fetch;
 const OLD_DOC = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "This is the old restored version." }] }] };
-const envNames = ["SUBSTACK_SID", "REVIEWER_SID", "REVIEWER_EMAIL", "GROQ_API_KEY", "GEMINI_API_KEY", "LLM_ORDER", "AUTH_STATE_PATH", "AUTH_CHALLENGE_TTL_MS"];
+const envNames = ["SUBSTACK_SID", "REVIEWER_SID", "REVIEWER_EMAIL", "GROQ_API_KEY", "GEMINI_API_KEY", "LLM_ORDER", "SUBSTACK_HISTORY", "AUTH_STATE_PATH", "AUTH_CHALLENGE_TTL_MS"];
 const originalEnv = Object.fromEntries(envNames.map((key) => [key, process.env[key]]));
 let draftId;
 let baseUrl;
@@ -80,6 +80,7 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   delete process.env.GROQ_API_KEY;
   delete process.env.GEMINI_API_KEY;
   process.env.LLM_ORDER = "groq"; // no key: use deterministic local heuristic, never a model
+  process.env.SUBSTACK_HISTORY = "1"; // exercise the editor-version routes
   process.env.AUTH_CHALLENGE_TTL_MS = "1000";
   challengeStateFile = path.join(os.tmpdir(), `typohunter-auth-e2e-${process.pid}-${Date.now()}.json`);
   process.env.AUTH_STATE_PATH = challengeStateFile;
@@ -363,6 +364,13 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
     body: JSON.stringify({ key: "post/old", edition: "en" }),
   });
   assert.equal(restoreTr.status, 400, "restore is refused for translation editions");
+
+  process.env.SUBSTACK_HISTORY = "0";
+  const disabledList = await (await realFetch(`${baseUrl}/api/posts/${draftId}?edition=original`, { headers: { Cookie: sessionCookie } })).json();
+  assert.equal(disabledList.versions, null, "the flag parks the Substack version list (UI falls back to local)");
+  const disabledPreview = await realFetch(`${baseUrl}/api/posts/${draftId}/versions/content?key=${encodeURIComponent("post/old")}`, { headers: { Cookie: sessionCookie } });
+  assert.equal(disabledPreview.status, 404, "version routes are absent while the flag is off");
+  process.env.SUBSTACK_HISTORY = "1";
 
   const loggedOut = await realFetch(`${baseUrl}/api/auth/logout`, { method: "POST", headers: { Cookie: sessionCookie } });
   assert.equal(loggedOut.status, 200);

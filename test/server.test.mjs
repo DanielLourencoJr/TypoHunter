@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   snapOf, sameSnap, snapOfVersion, latestMarkdown, editionParam, editionMarkdown,
   blankEdStore, migrateStore, edStore, pubsFromProfile,
-  sidFrom, reviewerSid, pubFrom, readJson, send,
+  sidFrom, reviewerSid, pubFrom, readJson, send, historyEnabled,
   enqueueAnalysis, queueAhead, jobEtaSec, jobs, pipelineProbe, sanitizeVersions, versionsProbe,
 } from "../server.js";
 import { geminiProvider } from "../lib/llm.js";
@@ -55,6 +55,14 @@ test("snapOfVersion: malformed version yields null", () => {
 
 test("latestMarkdown: last version wins", () => {
   assert.equal(latestMarkdown({ versions: [{ md: "a" }, { md: "b" }] }), "b");
+});
+
+test("historyEnabled: parked by default, enabled only for truthy values", () => {
+  withEnv({ SUBSTACK_HISTORY: undefined }, () => assert.equal(historyEnabled(), false));
+  withEnv({ SUBSTACK_HISTORY: "0" }, () => assert.equal(historyEnabled(), false));
+  withEnv({ SUBSTACK_HISTORY: "off" }, () => assert.equal(historyEnabled(), false));
+  withEnv({ SUBSTACK_HISTORY: "1" }, () => assert.equal(historyEnabled(), true));
+  withEnv({ SUBSTACK_HISTORY: "on" }, () => assert.equal(historyEnabled(), true));
 });
 
 // ---------------------------------------------------------------------------
@@ -320,8 +328,7 @@ test("sanitizeVersions: maps S3 snapshots and strips author emails", () => {
   assert.equal(v.items[0].at, "2026-10-05T19:11:34.000Z");
 });
 
-test("sanitizeVersions: tolerates a missing/garbage payload", () => {
-  assert.deepEqual(sanitizeVersions(null), { current: null, previousBucket: null, published: null, items: [] });
+test("sanitizeVersions: tolerates a missing/garbage payload", () => {  assert.deepEqual(sanitizeVersions(null), { current: null, previousBucket: null, published: null, items: [] });
   assert.deepEqual(sanitizeVersions({}).items, []);
 });
 
