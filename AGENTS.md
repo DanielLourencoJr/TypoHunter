@@ -123,8 +123,8 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
 - Apply consumes suggestions (`suggestions = []`); stale ones (text no longer
   contains `original`) are display-partitioned, never re-offered.
 - Push strips frontmatter before `mdToTiptap` or it renders as visible `---` text.
-- Editor version history is read from Substack's S3 snapshots (durable on
-  ephemeral hosting; supersedes the local list in the UI when present):
+- The app shows NO version list: rewinding is done in the Substack editor.
+  Editor version history is nevertheless read from Substack's S3 snapshots:
   `GET /api/v1/drafts/{id}/versions?bucket` → `listVersions`;
   `POST /api/v1/drafts/{id}/load_version` `{version_key}` → read-only preview
   (`loadVersion`, served by `GET /api/posts/:id/versions/content`); restore =
@@ -132,12 +132,11 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   round-trip), unpublished drafts only, original edition only
   (`restoreVersion`, `POST /api/posts/:id/versions/restore`). The list payload
   leaks author emails → always `sanitizeVersions` before it reaches the client.
-  Drafts with no stored content 400 the list call; that is caught and the UI
-  falls back to the local list.
+  Drafts with no stored content 400 the list call; that is caught.
 - Editor version history is parked behind `SUBSTACK_HISTORY` (default off;
   `render.yaml` sets it to `0`). When off, `GET /api/posts/:id` omits `versions`
-  and the content/restore routes 404, so the UI falls back to the local list.
-  The gated `POST /api/health/versions` probe stays available either way.
+  and the content/restore routes 404. The gated `POST /api/health/versions`
+  probe stays available either way.
 - `PUT /drafts` carries no `translations` field, so other language editions survive
   (verified live). Translation push uses `translateDraft`, which Substack rejects
   on published posts — UI disables it there.

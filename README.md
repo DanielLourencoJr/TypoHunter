@@ -68,8 +68,9 @@ persistent storage only if you want sessions to survive restarts.
 3. **Proofread** — the AI proposes minimal fixes (typos, spelling, grammar,
    punctuation only). Each shows as a red/green diff; uncheck anything that
    touches your voice.
-4. **Apply** — checked fixes become a new local version. Nothing reaches
-   Substack yet; every version is kept and rewound from the history.
+4. **Apply** — checked fixes are written into the draft. Nothing reaches
+   Substack yet; the app keeps a local version record so it can tell what
+   changed since your last push.
 5. **Push** — writes the version back into the Substack draft. Publishing to the
    public page is done from the Substack editor (the done screen links straight
    to it): server-side republish is off because Substack gates publishing behind
@@ -79,10 +80,9 @@ persistent storage only if you want sessions to survive restarts.
 Edits made directly in the Substack editor are picked up automatically as
 `synced from Substack` versions when the post is reopened.
 
-The **history** screen reads Substack's own editor revisions (S3 snapshots) and
-lets you preview any of them ("Ver") or restore one into an unpublished draft
-("Restaurar"); it falls back to the local list when a post has no editor
-history.
+Rewinding to an earlier revision is done in the Substack editor — the app
+intentionally shows no version list. (A read-only admin route reads Substack's
+own editor revisions behind the `SUBSTACK_HISTORY` flag, default off.)
 
 ## Verify a hosted deployment
 

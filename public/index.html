@@ -202,7 +202,6 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 .btn-y{background:var(--green);border-color:var(--green)}
 .btn-n{background:transparent;color:var(--red);border-color:var(--red)}
 .rej{font-family:var(--font-ui);font-size:13px;color:var(--muted);background:#f5f5f4;border-radius:8px;padding:6px 10px;margin:.7em 0}
-.tag{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted);margin-left:8px;white-space:nowrap}
 .media{font-family:var(--font-ui);font-size:13px;background:var(--soft);border:1px dashed var(--muted);border-radius:8px;padding:8px 12px;margin:.7em 0;color:var(--muted)}
 .media strong{color:var(--ink)}
 .media .mtag{font-size:11px;background:var(--soft);filter:brightness(.92);border-radius:999px;padding:1px 8px;margin-right:8px;white-space:nowrap}
@@ -211,15 +210,6 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 pre.raw{white-space:pre-wrap;background:var(--soft);padding:12px;border-radius:8px;font-size:13px;max-height:400px;overflow:auto}
 .hint{font-family:var(--font-ui);font-size:13px;color:var(--muted)}
 .err{display:none;background:var(--red-bg);color:var(--red);border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-family:var(--font-ui);font-size:14px;margin-top:10px}
-.ver{display:flex;gap:8px;align-items:center;font-family:var(--font-ui);font-size:13px;padding:8px 0;border-bottom:1px dashed var(--line);flex-wrap:wrap}
-.ver:last-child{border-bottom:none}
-.ver .vn{font-weight:700;min-width:34px}
-.src-user{border-left:3px solid #3b82f6;padding-left:10px}
-.src-rev{border-left:3px solid var(--accent);padding-left:10px}
-.src-orig{border-left:3px solid var(--line);padding-left:10px}
-.h-preview{margin:14px 0 4px;border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--soft)}
-.h-preview .h-pv-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
-.h-preview .h-pv-doc{white-space:pre-wrap;word-break:break-word;font-family:var(--font-text);font-size:15px;line-height:1.7;max-height:420px;overflow:auto}
 details{font-family:var(--font-ui);font-size:13px;color:var(--muted);margin-top:8px}
 .stickybar{position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:5;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .done-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
@@ -358,8 +348,8 @@ button:disabled { cursor: not-allowed; opacity: .52; transform: none !important;
 .tabs button { border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); }
 .tabs button:hover { border-color: var(--accent); color: var(--accent); }
 .tabs button.active { border-color: var(--ink); background: var(--ink); color: var(--card); }
-.ver { padding: 12px 5px; }
 .history-cover { width: 100%; max-height: 290px; margin: 0 0 20px; border: 1px solid var(--line); border-radius: 15px; background: var(--soft); object-fit: cover; object-position: center 42%; }
+.rv-cover { max-height: 160px; margin-bottom: 14px; }
 .sugwidget.grouped { border-left-width: 4px; padding: 13px; }
 .grouped .diff { margin: 0; }
 .grouped .dold, .grouped .dnew { line-height: 1.7; white-space: pre-wrap; }
@@ -492,11 +482,9 @@ a { color: var(--accent); }
 
   <section class="view" id="v-history">
     <div class="card">
-      <h2><span class="step">4</span><span id="h-title">Histórico</span></h2>
+      <h2><span class="step">4</span><span id="h-title">Revisar</span></h2>
       <img id="h-cover" class="history-cover" alt="" style="display:none" />
       <div class="tabs" id="edtabs" style="display:none"></div>
-      <div id="h-list"></div>
-      <div id="h-preview" class="h-preview" style="display:none" data-vkey=""></div>
       <div class="row" style="margin-top:12px">
         <button id="h-advance" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white" disabled>Analisando…</button>
         <span id="h-status" class="hint"></span>
@@ -513,6 +501,7 @@ a { color: var(--accent); }
         <span id="rv-count" class="hint"></span>
       </div>
       <div class="tabs" id="edtabs2" style="display:none"></div>
+      <img id="rv-cover" class="history-cover rv-cover" alt="" style="display:none" />
       <h2 style="margin-top:4px"><span id="rv-title">Revisão</span></h2>
       <div id="rv-doc" class="doc"></div>
       <div class="err" id="err-rev"></div>
@@ -1459,13 +1448,18 @@ $('filter').oninput = () => {
   }, 250);
 };
 
-/* ---------- histórico + análise em segundo plano ---------- */
-function originOf(v) {
-  const n = v.note || '';
-  if (/^synced from Substack/.test(n)) return { cls: 'src-user', label: 'Editor (você)' };
-  if (/^applied/.test(n)) return { cls: 'src-rev', label: 'Revisor' };
-  if (/^rewind/.test(n)) return { cls: 'src-rev', label: 'Revisor (reversão local)' };
-  return { cls: 'src-orig', label: 'Original do Substack' };
+/* ---------- preparação da revisão + análise em segundo plano ---------- */
+function setCover(img, src) {
+  if (!img) return;
+  if (src) {
+    img.onerror = () => { img.style.display = 'none'; };
+    img.src = src;
+    img.style.display = '';
+  } else {
+    img.onerror = null;
+    img.removeAttribute('src');
+    img.style.display = 'none';
+  }
 }
 async function openHistory(id, edition, adminHost) {
   clearErrs();
@@ -1476,18 +1470,18 @@ async function openHistory(id, edition, adminHost) {
     const slug = String(id).slice(4);
     const card = (S.posts?.published || []).find((p) => p.id === id) || {};
     S.cur = { id, edition: 'original', readonly: true, admin: { host: adminHost || ADM_HOST, slug },
-      sugs: null, sugState: 'idle', editorUrl: null, isPublished: false, translations: [] };
+      sugs: null, sugState: 'idle', editorUrl: null, isPublished: false, translations: [], cover: card.cover || null };
     S.decisions = {};
     S.groupDeselect.clear();
     S.cur.store = { versions: [{ n: 0, md: '', note: 'original (somente leitura)', createdAt: new Date().toISOString() }], suggestions: [], pushes: [] };
     showView('history');
     setStatus('abrindo…', 'busy');
-    renderHistory({ title: card.title || slug.replace(/-/g, ' '), cover: card.cover || null });
+    renderPostHeader({ title: card.title || slug.replace(/-/g, ' '), cover: card.cover || null });
     analyzeInBackground();
     setStatus('pronto');
     return;
   }
-  S.cur = { id, edition: edition || 'original', sugs: null, sugState: 'idle', editorUrl: null, isPublished: false, translations: [], coverFallback: libCover(id) };
+  S.cur = { id, edition: edition || 'original', sugs: null, sugState: 'idle', editorUrl: null, isPublished: false, translations: [], cover: libCover(id) };
   S.decisions = {};
   S.groupDeselect.clear();
   showView('history');
@@ -1500,7 +1494,7 @@ async function openHistory(id, edition, adminHost) {
     S.cur.title = j.title; S.cur.lang = j.language;
     S.cur.editorUrl = j.editorUrl; S.cur.isPublished = !!j.isPublished;
     S.cur.translations = j.translations || [];
-    renderHistory(j);
+    renderPostHeader(j);
     // dispara a análise na hora, mas a tela fica até o usuário avançar
     analyzeInBackground();
     setStatus('pronto');
@@ -1511,16 +1505,13 @@ function libCover(id) {
   const p = list.find((x) => String(x.id) === String(id));
   return (p && p.cover) || null;
 }
-function renderHistory(j) {
-  const st = S.cur.store;
+function renderPostHeader(j) {
   $('h-title').textContent = ' ' + (j.title || '#' + S.cur.id);
-  const cover = $('h-cover');
-  // The draft payload omits cover_image for many published posts, while the
-  // library card (from the published list) still has it — fall back to that so
-  // the header banner is not empty just because getDraft dropped the cover.
-  const coverSrc = j.cover || (S.cur && S.cur.coverFallback) || null;
-  cover.style.display = coverSrc ? '' : 'none';
-  if (coverSrc) cover.src = coverSrc;
+  // The draft payload omits cover_image for many published posts; the library
+  // card is the reliable source, so it leads and the draft cover only fills in.
+  S.cur.cover = S.cur.cover || j.cover || null;
+  setCover($('h-cover'), S.cur.cover);
+  setCover($('rv-cover'), S.cur.cover);
   const tabs = S.cur.translations.length
     ? `<button class="${S.cur.edition === 'original' ? 'active' : 'font-ui text-sm rounded-lg px-3 py-1.5 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition'}" data-ed="original">Original</button>` +
       S.cur.translations.map(t => `<button class="${S.cur.edition === t.language ? 'active' : 'font-ui text-sm rounded-lg px-3 py-1.5 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition'}" data-ed="${t.language}">${esc(t.language.toUpperCase())}</button>`).join('')
@@ -1529,72 +1520,6 @@ function renderHistory(j) {
   ed.style.display = tabs ? '' : 'none';
   ed.innerHTML = tabs;
   ed.querySelectorAll('button').forEach(b => b.onclick = () => openHistory(S.cur.id, b.dataset.ed));
-  const list = $('h-list');
-  const sv = S.cur.edition === 'original' ? j.versions : null;
-  if (sv && Array.isArray(sv.items) && sv.items.length) {
-    // Substack's own editor history (S3 snapshots) — durable across redeploys.
-    S.cur.versions = sv;
-    list.innerHTML = sv.items.map((v, i) => {
-      const isCurrent = sv.current ? v.key === sv.current : i === 0;
-      const who = v.user && v.user.name ? esc(v.user.name) : 'Substack';
-      const when = fmtWhen(v.at);
-      const n = sv.items.length - 1 - i;
-      const view = isCurrent ? '' : ` <button class="h-ver-btn font-ui text-sm rounded-lg px-2.5 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition" data-vkey="${esc(v.key)}" data-vn="${n}">Ver</button>`;
-      return `<div class="ver src-user"><span class="vn">v${n}</span><span>${when} <span class="tag">${who}</span>${isCurrent ? '<span class="tag">versão atual</span>' : ''}${view}</span></div>`;
-    }).join('') + `<p class="hint">Histórico do editor do Substack — vive no S3, sobrevive a reinícios.</p>`;
-    list.querySelectorAll('.h-ver-btn').forEach(b => b.onclick = () => viewSubstackVersion(b.dataset.vkey, Number(b.dataset.vn)));
-    return;
-  }
-  const pushes = st.pushes || [];
-  list.innerHTML = st.versions.map(v => {
-    const o = originOf(v);
-    const marks = pushes.filter(p => p.version === v.n)
-      .map(p => `<span class="tag">publicada${p.republished ? ' + republicada' : ''} ${(p.at || '').slice(0, 16).replace('T', ' ')}</span>`).join('');
-    return `<div class="ver ${o.cls}"><span class="vn">v${v.n}</span><span>${esc(v.note)} <span class="hint">${(v.createdAt || '').slice(0, 16).replace('T', ' ')}</span><span class="tag">${o.label}</span>${marks}</span></div>`;
-  }).join('') + `<p class="hint">Histórico local (apagado a cada reinício do servidor).</p>`;
-}
-function fmtWhen(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return String(iso).slice(0, 16).replace('T', ' ');
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-function viewSubstackVersion(key, n) {
-  const box = $('h-preview');
-  const open = box.dataset.vkey === key;
-  if (open) { box.style.display = 'none'; box.dataset.vkey = ''; box.innerHTML = ''; return; }
-  box.dataset.vkey = key;
-  box.dataset.vn = String(n);
-  box.style.display = '';
-  box.innerHTML = '<p class="hint">Carregando versão…</p>';
-  const at = (S.cur.versions && Array.isArray(S.cur.versions.items) ? S.cur.versions.items.find(v => v.key === key) : null);
-  const url = `/api/posts/${encodeURIComponent(S.cur.id)}/versions/content?edition=${encodeURIComponent(S.cur.edition)}&key=${encodeURIComponent(key)}${at && at.at ? `&at=${encodeURIComponent(at.at)}` : ''}`;
-  apiFetch(url, { headers: H() }).then(r => r.json()).then(j => {
-    if (j.error) throw new Error(j.error);
-    const restore = (S.cur.isPublished || S.cur.edition !== 'original') ? '' :
-      `<button id="h-restore" class="font-ui font-medium rounded-lg px-3 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Restaurar esta versão</button>`;
-    box.innerHTML = `<div class="h-pv-head"><span class="hint">v${n} · ${fmtWhen(j.at)}</span>${restore}</div><div class="h-pv-doc">${esc(j.markdown || '')}</div>`;
-    const rb = $('h-restore');
-    if (rb) rb.onclick = () => restoreSubstackVersion(key, n);
-  }).catch(e => { box.innerHTML = `<p class="err">Falha ao carregar a versão: ${esc(e.message)}</p>`; });
-}
-async function restoreSubstackVersion(key, n) {
-  const rb = $('h-restore');
-  if (rb) { rb.disabled = true; rb.textContent = 'Restaurando…'; }
-  try {
-    const r = await apiFetch(`/api/posts/${encodeURIComponent(S.cur.id)}/versions/restore`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', ...H() },
-      body: JSON.stringify({ key, edition: S.cur.edition }),
-    });
-    const j = await r.json();
-    if (j.error) throw new Error(j.error);
-    setStatus('versão restaurada — reabra para revisar', 'ok');
-    openHistory(S.cur.id, S.cur.edition);
-  } catch (e) {
-    showErr(`Falha ao restaurar: ${e.message}`, 'err-hist');
-    if (rb) { rb.disabled = false; rb.textContent = 'Restaurar esta versão'; }
-  }
 }
 function fmtEta(s) {
   s = Math.max(0, Math.round(s || 0));
@@ -1677,7 +1602,9 @@ function handleAnalysisResult(cur, j) {
     // version to it so the review screen renders with full context.
     cur.store.versions[cur.store.versions.length - 1].md = j.text || '';
     cur.title = j.title || cur.title;
-    if (j.cover) { $('h-cover').style.display = ''; $('h-cover').src = j.cover; }
+    cur.cover = cur.cover || j.cover || null;
+    setCover($('h-cover'), cur.cover);
+    setCover($('rv-cover'), cur.cover);
   }
   cur.sugs = j.suggestions || [];
   cur.sugState = 'ready';
@@ -1700,6 +1627,7 @@ function renderReview(scroll) {
   const md = st.versions[st.versions.length - 1].md;
   const { body } = splitFm(md);
   $('rv-title').textContent = ' ' + (S.cur.title || '#' + S.cur.id);
+  setCover($('rv-cover'), S.cur.cover || null);
   renderEdTabs2();
   let cur = body;
   const placements = [];

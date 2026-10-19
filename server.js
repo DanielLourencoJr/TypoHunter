@@ -111,8 +111,8 @@ function pubFrom(req, body, query) {
 
 // Substack editor version history is parked behind a flag, default OFF: the
 // endpoints are undocumented and pagination plus the header cover are still
-// open. Flip SUBSTACK_HISTORY=1 to expose it; when off, the UI falls back to
-// the local version list and the version routes answer as if absent.
+// open. Flip SUBSTACK_HISTORY=1 to expose it; when off, the version routes
+// answer as if absent (the app shows no version list either way).
 function historyEnabled() {
   return /^(1|true|on|yes)$/i.test(String(process.env.SUBSTACK_HISTORY || ""));
 }
@@ -1163,8 +1163,8 @@ const server = http.createServer(async (req, res) => {  try {
       const es = store.editions[edition];
       const cleanPub = String(pub || "").replace(/^https?:\/\//, "");
       // Best-effort: Substack's editor version history is durable (S3) unlike
-      // the local store on ephemeral hosting. Null when unavailable, so the
-      // UI falls back to the local version list.
+      // the local store on ephemeral hosting. Parked behind SUBSTACK_HISTORY
+      // and null when unavailable; the app no longer renders a version list.
       let versions = null;
       if (historyEnabled()) {
         try { versions = sanitizeVersions(await listVersions({ sid, publicationUrl: pub, id })); }

@@ -55,6 +55,7 @@ function makeElement(id) {
     addEventListener() {}, removeEventListener() {}, focus() {}, blur() {}, click() {},
     scrollIntoView() {}, appendChild() {}, remove() {}, setAttribute() {},
     getAttribute() { return null; },
+    removeAttribute(k) { delete this[k]; },
     querySelector() { return null; }, querySelectorAll() { return []; },
   };
 }
@@ -316,10 +317,12 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   await vm.runInContext(`openHistory('${draftId}')`, context);
   await waitFor(() => vm.runInContext("S.cur?.sugState === 'ready'", context), "proofread suggestions");
   assert.equal(vm.runInContext("S.cur.sugs.length", context), 2);
-  assert.equal(elements.get("h-cover").src, "https://cdn.example.test/draft-cover.png", "history header falls back to the library card cover when the draft payload omits it");
+  assert.equal(elements.get("h-cover").src, "https://cdn.example.test/draft-cover.png", "the pre-review header shows the library card cover");
   assert.equal(elements.get("h-cover").style.display, "", "the cover banner is shown");
 
   vm.runInContext("renderReview(false); showView('review')", context);
+  assert.equal(elements.get("rv-cover").src, "https://cdn.example.test/draft-cover.png", "the review screen shows the same cover");
+  assert.equal(elements.get("rv-cover").style.display, "", "the review cover banner is shown");
   assert.match(elements.get("rv-doc").innerHTML, /data-toggle-change="h1"/);
   assert.match(elements.get("rv-doc").innerHTML, /data-toggle-change="h2"/);
 
@@ -369,7 +372,7 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
 
   process.env.SUBSTACK_HISTORY = "0";
   const disabledList = await (await realFetch(`${baseUrl}/api/posts/${draftId}?edition=original`, { headers: { Cookie: sessionCookie } })).json();
-  assert.equal(disabledList.versions, null, "the flag parks the Substack version list (UI falls back to local)");
+  assert.equal(disabledList.versions, null, "the flag parks the Substack version list");
   const disabledPreview = await realFetch(`${baseUrl}/api/posts/${draftId}/versions/content?key=${encodeURIComponent("post/old")}`, { headers: { Cookie: sessionCookie } });
   assert.equal(disabledPreview.status, 404, "version routes are absent while the flag is off");
   process.env.SUBSTACK_HISTORY = "1";

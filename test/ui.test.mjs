@@ -28,6 +28,7 @@ function makeEl(id) {
     addEventListener() {}, removeEventListener() {}, focus() {}, blur() {}, click() {},
     scrollIntoView() {}, appendChild() {}, remove() {}, setAttribute() {},
     getAttribute() { return null; },
+    removeAttribute(k) { delete this[k]; },
     querySelector() { return null; }, querySelectorAll() { return []; },
   };
 }
@@ -156,11 +157,16 @@ T("diffHunk: highlights the changed token on both sides", () => {
   assert.match(h.newHtml, /hl-new">the<\/span>/);
 });
 
-T("originOf: classifies versions by note prefix", () => {
-  assert.equal(sandbox.originOf({ note: "synced from Substack x" }).label, "Editor (você)");
-  assert.equal(sandbox.originOf({ note: "applied 2 fixes" }).label, "Revisor");
-  assert.equal(sandbox.originOf({ note: "rewind to v1" }).label, "Revisor (reversão local)");
-  assert.equal(sandbox.originOf({ note: "original from Substack" }).label, "Original do Substack");
+T("setCover: shows a source, hides when absent or on load error", () => {
+  const img = makeEl("cover");
+  sandbox.setCover(img, "https://cdn.example.test/c.png");
+  assert.equal(img.src, "https://cdn.example.test/c.png");
+  assert.equal(img.style.display, "", "a cover source shows the banner");
+  img.onerror();
+  assert.equal(img.style.display, "none", "a broken cover hides instead of showing the broken-image icon");
+  sandbox.setCover(img, null);
+  assert.equal(img.style.display, "none");
+  assert.equal("src" in img, false, "no cover clears the src attribute");
 });
 
 T("fmtEta: seconds, minutes, clamping", () => {
