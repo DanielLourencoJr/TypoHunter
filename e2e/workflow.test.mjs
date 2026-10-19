@@ -8,6 +8,7 @@ import { randomInt } from "node:crypto";
 import { server, storePath, runAuthCleanup } from "../server.js";
 
 const realFetch = globalThis.fetch;
+const OLD_DOC = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "This is the old restored version." }] }] };
 const envNames = ["SUBSTACK_SID", "REVIEWER_SID", "REVIEWER_EMAIL", "GROQ_API_KEY", "GEMINI_API_KEY", "LLM_ORDER", "AUTH_STATE_PATH", "AUTH_CHALLENGE_TTL_MS"];
 const originalEnv = Object.fromEntries(envNames.map((key) => [key, process.env[key]]));
 let draftId;
@@ -140,6 +141,23 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
       return response({ posts, total: posts.length });
     }
     if (url.pathname === "/api/v1/post_management/published") return response({ posts: [], total: 43 });
+    if (url.pathname === `/api/v1/drafts/${draftId}/versions`) {
+      return response({
+        contentId: "post/cur",
+        publishedContentKey: null,
+        versions: {
+          previousBucket: null,
+          contents: [
+            { Key: "post/cur", LastModified: "2026-10-19T12:00:00.000Z", Size: 100, url: "s3://x", user: { id: 5, name: "E2E Writer", email: "leak@example.test" } },
+            { Key: "post/old", LastModified: "2026-10-18T12:00:00.000Z", Size: 80, url: "s3://y", user: null },
+          ],
+        },
+      });
+    }
+    if (url.pathname === `/api/v1/drafts/${draftId}/load_version` && init.method === "POST") {
+      assert.equal(JSON.parse(init.body).version_key, "post/old");
+      return response({ version: JSON.stringify(OLD_DOC), contentId: "post/old" });
+    }
     if (url.pathname === `/api/v1/drafts/${draftId}` && (!init.method || init.method === "GET")) {
       return response(remoteDraft);
     }
@@ -322,6 +340,29 @@ test("main workflow: fetch, review, accept/reject, apply, and push", async (t) =
   assert.equal(store.versions.length, 2, "push marks the applied version; it does not create another version");
   assert.equal(store.pushes.length, 1);
   assert.equal(store.pushes[0].version, 1);
+
+  const versionResp = await (await realFetch(`${baseUrl}/api/posts/${draftId}?edition=original`, { headers: { Cookie: sessionCookie } })).json();
+  assert.equal(versionResp.versions.current, "post/cur");
+  assert.equal(versionResp.versions.items.length, 2);
+  assert.equal(versionResp.versions.items[0].user.name, "E2E Writer");
+  assert.ok(!JSON.stringify(versionResp.versions).includes("leak@example.test"), "author email is stripped from the version list");
+
+  const previewResp = await realFetch(`${baseUrl}/api/posts/${draftId}/versions/content?key=${encodeURIComponent("post/old")}`, { headers: { Cookie: sessionCookie } });
+  assert.equal(previewResp.status, 200);
+  assert.match((await previewResp.json()).markdown, /old restored version/);
+
+  const restoreResp = await realFetch(`${baseUrl}/api/posts/${draftId}/versions/restore`, {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: sessionCookie },
+    body: JSON.stringify({ key: "post/old", edition: "original" }),
+  });
+  assert.equal(restoreResp.status, 200);
+  assert.deepEqual(JSON.parse(putPayload.draft_body), OLD_DOC, "restore PUTs the version body byte-identical");
+
+  const restoreTr = await realFetch(`${baseUrl}/api/posts/${draftId}/versions/restore`, {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: sessionCookie },
+    body: JSON.stringify({ key: "post/old", edition: "en" }),
+  });
+  assert.equal(restoreTr.status, 400, "restore is refused for translation editions");
 
   const loggedOut = await realFetch(`${baseUrl}/api/auth/logout`, { method: "POST", headers: { Cookie: sessionCookie } });
   assert.equal(loggedOut.status, 200);

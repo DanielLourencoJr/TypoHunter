@@ -324,3 +324,64 @@ test("sanitizeVersions: tolerates a missing/garbage payload", () => {
   assert.deepEqual(sanitizeVersions(null), { current: null, previousBucket: null, published: null, items: [] });
   assert.deepEqual(sanitizeVersions({}).items, []);
 });
+
+// ---------------------------------------------------------------------------
+// editor version preview + restore (vendored drafts client)
+// ---------------------------------------------------------------------------
+
+test("loadVersion: posts version_key and returns the tiptap doc", async () => {
+  const calls = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, opts = {}) => {
+    calls.push({ url: String(url), method: opts.method || "GET", body: opts.body ? JSON.parse(opts.body) : null });
+    return new Response(JSON.stringify({ version: JSON.stringify(DOC), contentId: "post/k" }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const { loadVersion } = await import("../lib/substack-cli/drafts.js");
+    const out = await loadVersion({ sid: "s", publicationUrl: "https://ex.substack.com", id: 5, versionKey: "post/5/x/y/h" });
+    assert.match(calls[0].url, /\/drafts\/5\/load_version$/);
+    assert.equal(calls[0].method, "POST");
+    assert.deepEqual(calls[0].body, { version_key: "post/5/x/y/h" });
+    assert.equal(JSON.parse(out.version).type, "doc");
+  } finally { globalThis.fetch = orig; }
+});
+
+test("restoreVersion: loads a version then PUTs it byte-identical, keeping the section", async () => {
+  const puts = [];
+  const orig = globalThis.fetch;
+  const docBody = JSON.stringify(DOC);
+  globalThis.fetch = async (url, opts = {}) => {
+    const u = String(url);
+    if (u.endsWith("/load_version")) return new Response(JSON.stringify({ version: docBody, contentId: "k" }), { status: 200 });
+    if (u.endsWith("/drafts/5") && (opts.method || "GET") === "PUT") {
+      puts.push(JSON.parse(opts.body));
+      return new Response(JSON.stringify({ draft_updated_at: "2026-10-19T00:00:00.000Z" }), { status: 200 });
+    }
+    if (u.endsWith("/drafts/5")) return new Response(JSON.stringify({ is_published: false, draft_title: "T", draft_subtitle: "", audience: "everyone", draft_section_id: 3 }), { status: 200 });
+    return new Response("{}", { status: 200 });
+  };
+  try {
+    const { restoreVersion } = await import("../lib/substack-cli/drafts.js");
+    const out = await restoreVersion({ sid: "s", publicationUrl: "https://ex.substack.com", id: 5, versionKey: "k" });
+    assert.equal(puts.length, 1);
+    assert.equal(puts[0].draft_body, docBody);
+    assert.equal(puts[0].draft_title, "T");
+    assert.equal(puts[0].draft_section_id, 3);
+    assert.equal(out.draft.draft_updated_at, "2026-10-19T00:00:00.000Z");
+  } finally { globalThis.fetch = orig; }
+});
+
+test("restoreVersion: refuses a published draft", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith("/load_version")) return new Response(JSON.stringify({ version: JSON.stringify(DOC) }), { status: 200 });
+    return new Response(JSON.stringify({ is_published: true }), { status: 200 });
+  };
+  try {
+    const { restoreVersion } = await import("../lib/substack-cli/drafts.js");
+    await assert.rejects(
+      () => restoreVersion({ sid: "s", publicationUrl: "https://ex.substack.com", id: 5, versionKey: "k" }),
+      /unpublished/,
+    );
+  } finally { globalThis.fetch = orig; }
+});

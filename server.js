@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { fetchProfileSelf } from "./lib/substack-cli/auth.js";
-import { createDraft, deleteDraft, getDraft, listDrafts, listPublished, listVersions, updateDraft, publishDraft, translateDraft } from "./lib/substack-cli/drafts.js";
+import { createDraft, deleteDraft, getDraft, listDrafts, listPublished, listVersions, loadVersion, restoreVersion, updateDraft, publishDraft, translateDraft } from "./lib/substack-cli/drafts.js";
 import { draftToMarkdown, tiptapToMarkdown } from "./lib/substack-cli/convert.js";
 import { parseFrontmatter, stringifyFrontmatter } from "./lib/substack-cli/frontmatter.js";
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
@@ -795,91 +795,6 @@ const server = http.createServer(async (req, res) => {  try {
       }
     }
 
-    // TEMPORARY discovery probe for the undocumented editor version-content
-    // endpoint. Read-only GETs only (never restores or writes). Gated by the
-    // reviewer SID; remove once the content path is confirmed.
-    if (req.method === "POST" && url.pathname === "/api/health/versions") {
-      const hkey = String(req.headers["x-health-key"] || "");
-      const expected = reviewerSid();
-      const keyOk = expected && hkey.length === expected.length && timingSafeEqual(Buffer.from(hkey), Buffer.from(expected));
-      if (!keyOk) return send(res, 404, { error: "not found" });
-      const body = await readJson(req);
-      const pub = publicationHost(body.pub || process.env.SMOKE_PUB);
-      if (!pub) return send(res, 409, { error: "no pub (set SMOKE_PUB or pass pub)" });
-      const base = `https://${pub}/api/v1`;
-      const hdr = { Cookie: `substack.sid=${expected}`, "Content-Type": "application/json", "User-Agent": "Mozilla/5.0" };
-      const getText = async (path) => {
-        try {
-          const r = await fetch(`${base}${path}`, { headers: hdr });
-          const t = await r.text();
-          let json = null;
-          try { json = JSON.parse(t); } catch { /* not json */ }
-          return { path, status: r.status, ct: (r.headers.get("content-type") || "").split(";")[0], len: t.length, json, head: t.slice(0, 90) };
-        } catch (e) { return { path, error: String(e.message || e).slice(0, 140) }; }
-      };
-      const out = { pub, scans: [], content: [] };
-      try {
-        let ids = [];
-        if (body.id) ids = [String(body.id)];
-        else {
-          const d = await getText("/drafts?limit=10");
-          const dp = Array.isArray(d.json) ? d.json : (d.json?.posts || []);
-          out.drafts = dp.length;
-          ids.push(...dp.map((p) => String(p.id)));
-          const p = await getText("/post_management/published?offset=0&limit=5&order_by=post_date&order_direction=desc");
-          const pp = p.json?.posts || [];
-          out.published = pp.length;
-          ids.push(...pp.map((x) => String(x.id)));
-        }
-        ids = [...new Set(ids)].slice(0, 15);
-        out.ids = ids;
-        let chosen = null;
-        let vkey = body.key || "";
-        let contentId = "";
-        let pubId = "";
-        for (const id of ids) {
-          const v = await getText(`/drafts/${id}/versions?bucket`);
-          const contents = Array.isArray(v.json?.versions?.contents) ? v.json.versions.contents : [];
-          out.scans.push({ id, status: v.status, count: contents.length, contentId: v.json?.contentId || null, prev: v.json?.versions?.previousBucket ?? null, keys: v.json ? Object.keys(v.json).slice(0, 8) : null, head: v.head });
-          if (!chosen && contents.length) {
-            chosen = id;
-            if (!vkey) vkey = contents[0].Key;
-            contentId = v.json.contentId || contents[0].Key;
-            pubId = v.json?.draft?.publication_id ? String(v.json.draft.publication_id) : "";
-          }
-        }
-        if (!chosen) return send(res, 200, { ...out, error: "no draft/post exposes editor history to the reviewer" });
-        out.id = chosen;
-        out.hasKey = Boolean(vkey);
-        out.contentId = contentId;
-        out.publicationId = pubId || null;
-        if (!vkey) return send(res, 200, out);
-        const enc = encodeURIComponent(vkey);
-        const encCid = encodeURIComponent(contentId || vkey);
-        out.enc = enc;
-        out.encCid = encCid;
-        out.load = [];
-        const variants = [
-          { version: vkey },
-          { key: vkey },
-          { contentId: vkey },
-          { versionKey: vkey },
-          { versionId: vkey },
-        ];
-        for (const bv of variants) {
-          const r = await fetch(`${base}/drafts/${chosen}/load_version`, { method: "POST", headers: hdr, body: JSON.stringify(bv) });
-          const t = await r.text();
-          let json = null;
-          try { json = JSON.parse(t); } catch { /* not json */ }
-          out.load.push({ body: Object.keys(bv).join(","), status: r.status, ct: (r.headers.get("content-type") || "").split(";")[0], keys: json ? Object.keys(json).slice(0, 6) : null, len: t.length, head: t.slice(0, 80) });
-          if (r.ok && json && json.version) break;
-        }
-        return send(res, 200, out);
-      } catch (e) {
-        return send(res, 502, { ...out, error: String(e.message || e).slice(0, 300) });
-      }
-    }
-
     // static (never cached: the UI evolves fast during testing)
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
       const f = path.join(ROOT, "public", "index.html");
@@ -1212,6 +1127,38 @@ const server = http.createServer(async (req, res) => {  try {
         versions,
         store: es,
       });
+    }
+
+    // preview one Substack editor version (read-only): returns its markdown.
+    const mVC = url.pathname.match(/^\/api\/posts\/(\d+)\/versions\/content$/);
+    if (req.method === "GET" && mVC) {
+      const sid = sidFrom(req);
+      const pub = pubFrom(req, null, url.searchParams);
+      if (!sid) return send(res, 401, { error: "missing SID" });
+      if (!pub) return send(res, 409, { error: "missing pub — pick a publication first" });
+      const key = url.searchParams.get("key");
+      if (!key) return send(res, 400, { error: "missing key" });
+      const loaded = await loadVersion({ sid, publicationUrl: pub, id: mVC[1], versionKey: key });
+      let doc = loaded?.version;
+      if (typeof doc === "string") {
+        try { doc = JSON.parse(doc); } catch { throw new Error("version body is not valid JSON"); }
+      }
+      if (!doc || doc.type !== "doc") return send(res, 502, { error: "version body unavailable" });
+      return send(res, 200, { at: url.searchParams.get("at") || null, markdown: tiptapToMarkdown(doc), contentId: loaded.contentId || null });
+    }
+
+    // restore an unpublished draft to one editor version (original edition only).
+    const mVR = url.pathname.match(/^\/api\/posts\/(\d+)\/versions\/restore$/);
+    if (req.method === "POST" && mVR) {
+      const body = await readJson(req);
+      const sid = sidFrom(req);
+      const pub = pubFrom(req, body, url.searchParams);
+      if (!sid) return send(res, 401, { error: "missing SID" });
+      if (!pub) return send(res, 409, { error: "missing pub — pick a publication first" });
+      if (editionParam(url, body) !== "original") return send(res, 400, { error: "restore is only supported for the original edition" });
+      if (!body.key) return send(res, 400, { error: "missing key" });
+      const out = await restoreVersion({ sid, publicationUrl: pub, id: mVR[1], versionKey: body.key });
+      return send(res, 200, { ok: true, draft_updated_at: out?.draft?.draft_updated_at ?? null });
     }
 
     // proofread latest version (per edition, in that edition's language).

@@ -1521,7 +1521,7 @@ function renderHistory(j) {
   ed.innerHTML = tabs;
   ed.querySelectorAll('button').forEach(b => b.onclick = () => openHistory(S.cur.id, b.dataset.ed));
   const list = $('h-list');
-  const sv = j.versions;
+  const sv = S.cur.edition === 'original' ? j.versions : null;
   if (sv && Array.isArray(sv.items) && sv.items.length) {
     // Substack's own editor history (S3 snapshots) — durable across redeploys.
     S.cur.versions = sv;
@@ -1559,10 +1559,11 @@ function viewSubstackVersion(key, n) {
   box.dataset.vn = String(n);
   box.style.display = '';
   box.innerHTML = '<p class="hint">Carregando versão…</p>';
-  const url = `/api/posts/${encodeURIComponent(S.cur.id)}/versions/content?edition=${encodeURIComponent(S.cur.edition)}&key=${encodeURIComponent(key)}`;
+  const at = (S.cur.versions && Array.isArray(S.cur.versions.items) ? S.cur.versions.items.find(v => v.key === key) : null);
+  const url = `/api/posts/${encodeURIComponent(S.cur.id)}/versions/content?edition=${encodeURIComponent(S.cur.edition)}&key=${encodeURIComponent(key)}${at && at.at ? `&at=${encodeURIComponent(at.at)}` : ''}`;
   apiFetch(url, { headers: H() }).then(r => r.json()).then(j => {
     if (j.error) throw new Error(j.error);
-    const restore = S.cur.isPublished ? '' :
+    const restore = (S.cur.isPublished || S.cur.edition !== 'original') ? '' :
       `<button id="h-restore" class="font-ui font-medium rounded-lg px-3 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Restaurar esta versão</button>`;
     box.innerHTML = `<div class="h-pv-head"><span class="hint">v${n} · ${fmtWhen(j.at)}</span>${restore}</div><div class="h-pv-doc">${esc(j.markdown || '')}</div>`;
     const rb = $('h-restore');

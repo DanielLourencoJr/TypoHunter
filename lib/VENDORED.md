@@ -12,10 +12,13 @@ Source: local `SubstackCLI` repository, revision
 Copied modules: `auth.js`, `convert.js`, `drafts.js`, `files.js`,
 `frontmatter.js`, `images.js`, and `md.js` into `lib/substack-cli/`.
 
-Local additions layered on the vendored `drafts.js` (editor version history,
-see `GET /api/v1/drafts/{id}/versions?bucket`): `listVersions` and the
-version-content/restore helpers. Keep them additive so upstream can be
-re-applied cleanly.
+Local additions layered on the vendored `drafts.js` (editor version history):
+`listVersions` (`GET /api/v1/drafts/{id}/versions?bucket`), `loadVersion`
+(`POST /api/v1/drafts/{id}/load_version` with `{ version_key }`, read-only
+preview) and `restoreVersion` (load_version → `PUT /api/v1/drafts/{id}` with the
+snapshot's tiptap doc). The version list payload carries author emails, so
+`server.js` maps it through `sanitizeVersions` before it reaches the client.
+Keep these additive so upstream can be re-applied cleanly.
 
 ## SubstackKit
 

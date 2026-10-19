@@ -120,6 +120,17 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
 - Apply consumes suggestions (`suggestions = []`); stale ones (text no longer
   contains `original`) are display-partitioned, never re-offered.
 - Push strips frontmatter before `mdToTiptap` or it renders as visible `---` text.
+- Editor version history is read from Substack's S3 snapshots (durable on
+  ephemeral hosting; supersedes the local list in the UI when present):
+  `GET /api/v1/drafts/{id}/versions?bucket` → `listVersions`;
+  `POST /api/v1/drafts/{id}/load_version` `{version_key}` → read-only preview
+  (`loadVersion`, served by `GET /api/posts/:id/versions/content`); restore =
+  load_version → `PUT /drafts/{id}` with the snapshot's tiptap doc (no markdown
+  round-trip), unpublished drafts only, original edition only
+  (`restoreVersion`, `POST /api/posts/:id/versions/restore`). The list payload
+  leaks author emails → always `sanitizeVersions` before it reaches the client.
+  Drafts with no stored content 400 the list call; that is caught and the UI
+  falls back to the local list.
 - `PUT /drafts` carries no `translations` field, so other language editions survive
   (verified live). Translation push uses `translateDraft`, which Substack rejects
   on published posts — UI disables it there.

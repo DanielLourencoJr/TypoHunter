@@ -79,6 +79,11 @@ persistent storage only if you want sessions to survive restarts.
 Edits made directly in the Substack editor are picked up automatically as
 `synced from Substack` versions when the post is reopened.
 
+The **history** screen reads Substack's own editor revisions (S3 snapshots) and
+lets you preview any of them ("Ver") or restore one into an unpublished draft
+("Restaurar"); it falls back to the local list when a post has no editor
+history.
+
 ## Verify a hosted deployment
 
 `GET /api/health` (public, no secrets) reports the live commit, Node version,
