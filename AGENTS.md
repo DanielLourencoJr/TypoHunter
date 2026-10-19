@@ -205,3 +205,7 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   change is complete. Commits are short imperative one-liners; no PR process.
   Always commit after finishing a change so nothing is left dangling in the
   working tree.
+- After pushing, confirm CI is green before moving on — never assume a change is
+  correct. `gh run list --limit 5` (or `gh run watch <id>`) shows the `CI`
+  workflow (`npm test` + `npm run test:e2e` on Node 18/20/22); it runs on every
+  push and PR.
