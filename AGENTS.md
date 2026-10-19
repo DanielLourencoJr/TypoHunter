@@ -9,17 +9,18 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
 - `npm run dev` (nodemon, watches `server.js`/`lib`/`public`, ignores `data/`) →
   `http://localhost:5179`. UI-only edits (`public/index.html`,
   served from disk per request, `no-store`) need no restart either way.
-- `npm test` (builtin `node:test`, no deps): `test/llm.test.mjs`
-  (mocked `fetch`: 429 daily-vs-minute, 5xx/network transient, provider order),
-  `test/proofread.test.mjs` (YAML/prompt, `maskOpaque` id stability, paragraph
-  hashing, filtering, failover), `test/ui.test.mjs` (the real inline `<script>`
-  evaluated in `node:vm` with DOM stubs — never copy functions),
-  `test/server.test.mjs` (store migration, snapshots, queue ETA — needs the
-  main-guard so importing `server.js` does not bind a port), and
-  `test/corpus.test.mjs` (re-derives the frozen corpus hashes; never regenerates).
-  `npm run test:e2e` starts the real server on loopback and exercises the draft
-  review flow and auth slide navigation in Chromium against mocked APIs; no
-  account or model key is used. Install the browser once with
+- `npm test` (builtin `node:test`, no deps) runs `test/*.test.mjs`: `llm`
+  (mocked `fetch`: 429 daily-vs-minute, 5xx/network transient, provider order,
+  opencode session + `failover`), `proofread` (YAML/prompt, `maskOpaque` id
+  stability, paragraph hashing, filtering, failover), `ui` (the real inline
+  `<script>` evaluated in `node:vm` with DOM stubs — never copy functions),
+  `auth-ui`, `server` (store migration, snapshots, queue ETA, `pipelineProbe` —
+  needs the main-guard so importing `server.js` does not bind a port), `health`,
+  `opencode-sweep`, and `corpus` (re-derives the frozen corpus hashes; never
+  regenerates).
+  `npm run test:e2e` (`e2e/*.test.mjs`, Chromium) starts the real server on
+  loopback and drives the draft review flow and auth-slide navigation against
+  mocked APIs; no account or model key is used. Install once with
   `npx playwright install chromium`.
   Still run `node --check <file>` on edits; for `public/index.html`, extract the
   `<script>` block and `node --check` it.
@@ -43,7 +44,9 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   the quality gate but has daily caps) sets failover order; only keys
   present are used, none at all = heuristic demo. Daily-cap 429s fail over,
   never retried. Per-provider daily spend lands in `data/llm-usage.json`
-  (gitignored, best-effort).
+  (gitignored, best-effort). In this Codespace only `REVIEWER_SID` is populated
+  — the Gemini/Groq keys are empty, so local proofreads go through the opencode
+  CLI (or heuristic); don't assume a hosted model reproduces a local result.
 - Optional third provider: **opencode** (free tier). It is NOT an HTTP endpoint —
   the Console rejects direct calls (`403 FreeTierError: "can only be used from
   within OpenCode"`), including replays of opencode's exact User-Agent/`x-opencode-*`
@@ -69,7 +72,8 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   prose — the accepted trade-off of leading with the effectively-uncapped free
   model. A missing/expired CLI credential (401/403) is marked `err.failover`, so
   it drops to the next provider instead of aborting the job.
-  `REVIEWER_SID` is the service (contributor-model) identity; central vault keeps
+- Service identity, sessions, hosted checks: `REVIEWER_SID` is the service
+  (contributor-model) identity; central vault keeps
   `SUBSTACK_SID_REVIEWER` + `SUBSTACK_USERID_REVIEWER` + `SUBSTACK_HANDLE_REVIEWER`.
   `REVIEWER_EMAIL` is public setup guidance shown by the login gate. Auth
   challenges and sessions are stored in `data/auth-state.json` (or
@@ -77,17 +81,17 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   and sessions) is ephemeral, which is fine: Substack's editor keeps the
   authoritative revision history. `GET /api/health` (public) reports the live
   commit/providers; `POST /api/health/deep` (gated by the reviewer SID as
-  `x-health-key`, needs `SMOKE_PUB`) proves the reviewer can still edit the test
-  publication by creating and immediately deleting one throwaway draft;
-  `POST /api/health/proofread` (same gate) runs the REAL suggestions pipeline
-  (`pipelineProbe`: ordered providers → prompt → `proofreadText` →
+  `x-health-key`; the server needs `SMOKE_PUB`) proves the reviewer can still
+  edit the test publication by creating and immediately deleting one throwaway
+  draft; `POST /api/health/proofread` (same gate) runs the REAL suggestions
+  pipeline (`pipelineProbe`: ordered providers → prompt → `proofreadText` →
   `filterSuggestions`) on a fixed one-typo sample and reports which
   provider/model served it — pass `{only:"opencode"}` to prove a specific
   provider, not just failover. `npm run verify:hosted [-- --deep]
   [--pipeline [--only <name>]]` checks these from anywhere (Substack calls
-  happen server-side). Publishing to the live page is done in the Substack
-  editor — server-side republish is intentionally off (Substack gates it behind
-  a fresh sign-in).
+  happen server-side; both client flags need only `REVIEWER_SID` locally).
+  Publishing to the live page is done in the Substack editor — server-side
+  republish is intentionally off (Substack gates it behind a fresh sign-in).
   Verification drafts expire after 15 minutes and are removed on successful
   verification or by the cleanup loop after expiry. Sessions last 12 hours.
   Direct publication sign-in opens its drafts. Profile sign-in lists public
@@ -143,13 +147,17 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   (`--limit`/`--concurrency`, deterministic even spread); it reports objective
   facts only (valid JSON, edit counts, latency, tokens) and dumps the edits,
   it does NOT assign correct/wrong verdicts (no authoritative labels exist).
+  `scripts/quality-gate.mjs` is the frugal quality gate (Groq/Gemini/opencode
+  on a hand-picked trap set); `scripts/export-corpus.mjs` is the one-shot
+  corpus freezer — do not re-run it.
 
 ## Styling
 
 - Tailwind via Play CDN (no build) + inline `tailwind.config` (`darkMode` follows
   our `data-theme` selector, brand orange, font stacks). Custom diff/media/widget
   CSS stays in `public/index.html`; buttons/layout are Tailwind utilities.
-  App requires internet anyway (Substack + Groq), so CDN is acceptable here.
+  The app needs the network anyway (Substack + a model provider), so CDN is
+  acceptable here.
 
 ## Gotchas
 
