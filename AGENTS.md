@@ -198,6 +198,10 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   recurs, consider a conservative locality guard in `filterSuggestions`.
 - `node --check` catches syntax only; re-read edited regions for dropped
   declarations (has happened twice in this file's history).
-- Commits: short imperative one-liners, no PR process in this repo. Always
-  commit after finishing a change — especially on a branch, so nothing is left
-  dangling in the working tree.
+- Branches: never commit feature work directly to `master` — `master` is what
+  Render deploys. Cut a short-lived branch named after the change
+  (`login-gate`, `hosted-health-check`, `opencode-default` are the pattern),
+  commit there, then `git merge --ff-only <branch>` into `master` when the
+  change is complete. Commits are short imperative one-liners; no PR process.
+  Always commit after finishing a change so nothing is left dangling in the
+  working tree.
