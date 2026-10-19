@@ -817,6 +817,15 @@ const server = http.createServer(async (req, res) => {  try {
           return { path, status: r.status, ct: (r.headers.get("content-type") || "").split(";")[0], len: t.length, json, head: t.slice(0, 90) };
         } catch (e) { return { path, error: String(e.message || e).slice(0, 140) }; }
       };
+      const getTextOn = async (host, path) => {
+        try {
+          const r = await fetch(`https://${host}/api/v1${path}`, { headers: hdr });
+          const t = await r.text();
+          let json = null;
+          try { json = JSON.parse(t); } catch { /* not json */ }
+          return { status: r.status, ct: (r.headers.get("content-type") || "").split(";")[0], len: t.length, json, head: t.slice(0, 90) };
+        } catch (e) { return { error: String(e.message || e).slice(0, 140) }; }
+      };
       const out = { pub, scans: [], content: [] };
       try {
         let ids = [];
@@ -835,33 +844,58 @@ const server = http.createServer(async (req, res) => {  try {
         out.ids = ids;
         let chosen = null;
         let vkey = body.key || "";
+        let contentId = "";
+        let pubId = "";
         for (const id of ids) {
           const v = await getText(`/drafts/${id}/versions?bucket`);
           const contents = Array.isArray(v.json?.versions?.contents) ? v.json.versions.contents : [];
           out.scans.push({ id, status: v.status, count: contents.length, contentId: v.json?.contentId || null, prev: v.json?.versions?.previousBucket ?? null, keys: v.json ? Object.keys(v.json).slice(0, 8) : null, head: v.head });
-          if (!chosen && contents.length) { chosen = id; if (!vkey) vkey = contents[0].Key; }
+          if (!chosen && contents.length) {
+            chosen = id;
+            if (!vkey) vkey = contents[0].Key;
+            contentId = v.json.contentId || contents[0].Key;
+            pubId = v.json?.draft?.publication_id ? String(v.json.draft.publication_id) : "";
+          }
         }
         if (!chosen) return send(res, 200, { ...out, error: "no draft/post exposes editor history to the reviewer" });
         out.id = chosen;
         out.hasKey = Boolean(vkey);
+        out.contentId = contentId;
+        out.publicationId = pubId || null;
         if (!vkey) return send(res, 200, out);
         const enc = encodeURIComponent(vkey);
-        const candidates = [
-          `/drafts/${chosen}/versions/${enc}`,
-          `/drafts/${chosen}/versions/${vkey}`,
+        const encCid = encodeURIComponent(contentId || vkey);
+        const pid = pubId ? `&publication_id=${pubId}` : "";
+        const paths = [
+          `/drafts/${chosen}/versions/content?key=${enc}${pid}`,
+          `/drafts/${chosen}/versions/content?contentId=${encCid}${pid}`,
+          `/drafts/${chosen}/versions/content?contentKey=${enc}${pid}`,
+          `/drafts/${chosen}/versions/content?versionKey=${enc}${pid}`,
+          `/drafts/${chosen}/versions/content?objectKey=${enc}${pid}`,
           `/drafts/${chosen}/versions/${enc}/content`,
-          `/drafts/${chosen}/versions/content?key=${enc}`,
-          `/drafts/${chosen}/versions/content?contentId=${enc}`,
-          `/drafts/${chosen}/versions/content?id=${enc}`,
-          `/drafts/${chosen}/versions?key=${enc}`,
-          `/drafts/${chosen}/versions?contentId=${enc}`,
-          `/drafts/${chosen}/content?key=${enc}`,
-          `/drafts/${chosen}/version/${enc}`,
+          `/drafts/${chosen}/versions/${enc}`,
+          `/drafts/${chosen}/versions/${enc}/download`,
+          `/drafts/${chosen}/versions/${enc}/signed_url`,
+          `/drafts/${chosen}/versions/${enc}/url`,
+          `/drafts/${chosen}/versions/content/${enc}`,
+          `/drafts/${chosen}/versions/download?key=${enc}`,
+          `/drafts/${chosen}/versions/raw?key=${enc}`,
+          `/drafts/${chosen}/versions/body?key=${enc}`,
+          `/drafts/${chosen}/version_content?key=${enc}`,
+          `/drafts/${chosen}/content/${enc}`,
           `/content/${enc}`,
+          `/content_versions/${enc}`,
+          `/post_content/${enc}`,
+          `/s3/${enc}`,
+          `/signed_url?key=${enc}`,
+          `/drafts/${chosen}/versions?bucket&include_content=1`,
+          `/drafts/${chosen}/versions?bucket&full=1`,
         ];
-        for (const cp of candidates) {
-          const r = await getText(cp);
-          out.content.push({ path: cp.split("?")[0], status: r.status, ct: r.ct, len: r.len, keys: r.json ? Object.keys(r.json).slice(0, 8) : null, head: r.head });
+        for (const h of [pub, "substack.com"]) {
+          for (const p of paths) {
+            const r = await getTextOn(h, p);
+            out.content.push({ host: h, path: p.split("?")[0], status: r.status, ct: r.ct, len: r.len, keys: r.json ? Object.keys(r.json).slice(0, 8) : null, head: r.head });
+          }
         }
         return send(res, 200, out);
       } catch (e) {
