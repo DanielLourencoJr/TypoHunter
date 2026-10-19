@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { fetchProfileSelf } from "./lib/substack-cli/auth.js";
-import { createDraft, deleteDraft, getDraft, listDrafts, listPublished, updateDraft, publishDraft, translateDraft } from "./lib/substack-cli/drafts.js";
+import { createDraft, deleteDraft, getDraft, listDrafts, listPublished, listVersions, updateDraft, publishDraft, translateDraft } from "./lib/substack-cli/drafts.js";
 import { draftToMarkdown, tiptapToMarkdown } from "./lib/substack-cli/convert.js";
 import { parseFrontmatter, stringifyFrontmatter } from "./lib/substack-cli/frontmatter.js";
 import { proofreadMarkdown, applySuggestions, maskOpaque, splitChunks } from "./lib/proofread.js";
@@ -404,6 +404,24 @@ function snapOfVersion(v) {
   }
 }
 
+// Editor version history comes from Substack's own S3 snapshots, so it survives
+// redeploys (unlike data/<id>/store.json on ephemeral hosting). Never forward
+// the raw payload: each entry carries the author's email address.
+function sanitizeVersions(raw) {
+  const contents = Array.isArray(raw?.versions?.contents) ? raw.versions.contents : [];
+  return {
+    current: raw?.contentId || null,
+    previousBucket: raw?.versions?.previousBucket || null,
+    published: raw?.publishedContentKey || null,
+    items: contents.map((c) => ({
+      key: c.Key,
+      at: c.LastModified || null,
+      size: c.Size ?? null,
+      user: c.user ? { id: c.user.id, name: c.user.name } : null,
+    })),
+  };
+}
+
 function editionParam(url, body) {
   const e = body?.edition || url.searchParams.get("edition") || "original";
   return String(e).toLowerCase();
@@ -777,6 +795,66 @@ const server = http.createServer(async (req, res) => {  try {
       }
     }
 
+    // TEMPORARY discovery probe for the undocumented editor version-content
+    // endpoint. Read-only GETs only (never restores or writes). Gated by the
+    // reviewer SID; remove once the content path is confirmed.
+    if (req.method === "POST" && url.pathname === "/api/health/versions") {
+      const hkey = String(req.headers["x-health-key"] || "");
+      const expected = reviewerSid();
+      const keyOk = expected && hkey.length === expected.length && timingSafeEqual(Buffer.from(hkey), Buffer.from(expected));
+      if (!keyOk) return send(res, 404, { error: "not found" });
+      const body = await readJson(req);
+      const pub = publicationHost(body.pub || process.env.SMOKE_PUB);
+      if (!pub) return send(res, 409, { error: "no pub (set SMOKE_PUB or pass pub)" });
+      const base = `https://${pub}/api/v1`;
+      const hdr = { Cookie: `substack.sid=${expected}`, "Content-Type": "application/json", "User-Agent": "Mozilla/5.0" };
+      const probe = async (path) => {
+        try {
+          const r = await fetch(`${base}${path}`, { headers: hdr });
+          const t = await r.text();
+          let keys = null;
+          try { keys = Object.keys(JSON.parse(t)).slice(0, 12); } catch { /* not json */ }
+          return { path: path.split("?")[0], status: r.status, ct: (r.headers.get("content-type") || "").split(";")[0], len: t.length, keys, head: t.slice(0, 90) };
+        } catch (e) { return { path: path.split("?")[0], error: String(e.message || e).slice(0, 120) }; }
+      };
+      const out = { pub, steps: [] };
+      try {
+        let id = body.id ? String(body.id) : "";
+        if (!id) {
+          const j = await fetch(`${base}/drafts?limit=5`, { headers: hdr }).then((r) => r.json()).catch(() => null);
+          const posts = Array.isArray(j) ? j : (j?.posts || []);
+          out.drafts = posts.length;
+          if (posts[0]) id = String(posts[0].id);
+        }
+        if (!id) return send(res, 200, { ...out, error: "no accessible draft id; pass id" });
+        out.id = id;
+        const raw = await fetch(`${base}/drafts/${id}/versions?bucket`, { headers: hdr }).then((r) => r.json()).catch(() => null);
+        const vkey = body.key || raw?.versions?.contents?.[0]?.Key || "";
+        out.versionCount = raw?.versions?.contents?.length ?? null;
+        out.previousBucket = raw?.versions?.previousBucket ?? null;
+        out.publishedContentKey = raw?.publishedContentKey ?? null;
+        if (!vkey) return send(res, 200, { ...out, error: "no version key" });
+        const enc = encodeURIComponent(vkey);
+        const candidates = [
+          `/drafts/${id}/versions/${enc}`,
+          `/drafts/${id}/versions/${vkey}`,
+          `/drafts/${id}/versions/${enc}/content`,
+          `/drafts/${id}/versions/content?key=${enc}`,
+          `/drafts/${id}/versions/content?contentId=${enc}`,
+          `/drafts/${id}/versions/content?id=${enc}`,
+          `/drafts/${id}/versions?key=${enc}`,
+          `/drafts/${id}/versions?contentId=${enc}`,
+          `/drafts/${id}/content?key=${enc}`,
+          `/drafts/${id}/version/${enc}`,
+          `/content/${enc}`,
+        ];
+        for (const p of candidates) out.steps.push(await probe(p));
+        return send(res, 200, out);
+      } catch (e) {
+        return send(res, 502, { ...out, error: String(e.message || e).slice(0, 300) });
+      }
+    }
+
     // static (never cached: the UI evolves fast during testing)
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
       const f = path.join(ROOT, "public", "index.html");
@@ -1090,6 +1168,12 @@ const server = http.createServer(async (req, res) => {  try {
       }
       const es = store.editions[edition];
       const cleanPub = String(pub || "").replace(/^https?:\/\//, "");
+      // Best-effort: Substack's editor version history is durable (S3) unlike
+      // the local store on ephemeral hosting. Null when unavailable, so the
+      // UI falls back to the local version list.
+      let versions = null;
+      try { versions = sanitizeVersions(await listVersions({ sid, publicationUrl: pub, id })); }
+      catch { /* fall back to local store versions */ }
       return send(res, 200, {
         id,
         edition,
@@ -1100,6 +1184,7 @@ const server = http.createServer(async (req, res) => {  try {
         cover: draft.cover_image || null,
         editorUrl: cleanPub ? `https://${cleanPub}/publish/post/${id}` : null,
         translations,
+        versions,
         store: es,
       });
     }
@@ -1418,5 +1503,6 @@ export {
   storePath, loadStore, saveStore, latestMarkdown,
   snapOf, sameSnap, snapOfVersion, editionParam, editionMarkdown,
   blankEdStore, migrateStore, edStore,
+  sanitizeVersions,
   enqueueAnalysis, queueAhead, jobEtaSec, pumpQueue, jobs, server,
 };

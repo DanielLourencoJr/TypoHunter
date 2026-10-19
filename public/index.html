@@ -217,6 +217,9 @@ pre.raw{white-space:pre-wrap;background:var(--soft);padding:12px;border-radius:8
 .src-user{border-left:3px solid #3b82f6;padding-left:10px}
 .src-rev{border-left:3px solid var(--accent);padding-left:10px}
 .src-orig{border-left:3px solid var(--line);padding-left:10px}
+.h-preview{margin:14px 0 4px;border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--soft)}
+.h-preview .h-pv-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.h-preview .h-pv-doc{white-space:pre-wrap;word-break:break-word;font-family:var(--font-text);font-size:15px;line-height:1.7;max-height:420px;overflow:auto}
 details{font-family:var(--font-ui);font-size:13px;color:var(--muted);margin-top:8px}
 .stickybar{position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:5;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .done-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
@@ -493,6 +496,7 @@ a { color: var(--accent); }
       <img id="h-cover" class="history-cover" alt="" style="display:none" />
       <div class="tabs" id="edtabs" style="display:none"></div>
       <div id="h-list"></div>
+      <div id="h-preview" class="h-preview" style="display:none" data-vkey=""></div>
       <div class="row" style="margin-top:12px">
         <button id="h-advance" class="font-ui font-medium rounded-lg px-4 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white" disabled>Analisando…</button>
         <span id="h-status" class="hint"></span>
@@ -1516,13 +1520,71 @@ function renderHistory(j) {
   ed.style.display = tabs ? '' : 'none';
   ed.innerHTML = tabs;
   ed.querySelectorAll('button').forEach(b => b.onclick = () => openHistory(S.cur.id, b.dataset.ed));
+  const list = $('h-list');
+  const sv = j.versions;
+  if (sv && Array.isArray(sv.items) && sv.items.length) {
+    // Substack's own editor history (S3 snapshots) — durable across redeploys.
+    S.cur.versions = sv;
+    list.innerHTML = sv.items.map((v, i) => {
+      const isCurrent = sv.current ? v.key === sv.current : i === 0;
+      const who = v.user && v.user.name ? esc(v.user.name) : 'Substack';
+      const when = fmtWhen(v.at);
+      const n = sv.items.length - 1 - i;
+      const view = isCurrent ? '' : ` <button class="h-ver-btn font-ui text-sm rounded-lg px-2.5 py-1 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition" data-vkey="${esc(v.key)}" data-vn="${n}">Ver</button>`;
+      return `<div class="ver src-user"><span class="vn">v${n}</span><span>${when} <span class="tag">${who}</span>${isCurrent ? '<span class="tag">versão atual</span>' : ''}${view}</span></div>`;
+    }).join('') + `<p class="hint">Histórico do editor do Substack — vive no S3, sobrevive a reinícios.</p>`;
+    list.querySelectorAll('.h-ver-btn').forEach(b => b.onclick = () => viewSubstackVersion(b.dataset.vkey, Number(b.dataset.vn)));
+    return;
+  }
   const pushes = st.pushes || [];
-  $('h-list').innerHTML = st.versions.map(v => {
+  list.innerHTML = st.versions.map(v => {
     const o = originOf(v);
     const marks = pushes.filter(p => p.version === v.n)
       .map(p => `<span class="tag">publicada${p.republished ? ' + republicada' : ''} ${(p.at || '').slice(0, 16).replace('T', ' ')}</span>`).join('');
     return `<div class="ver ${o.cls}"><span class="vn">v${v.n}</span><span>${esc(v.note)} <span class="hint">${(v.createdAt || '').slice(0, 16).replace('T', ' ')}</span><span class="tag">${o.label}</span>${marks}</span></div>`;
-  }).join('') + `<p class="hint">O texto não é exibido aqui de propósito — revise só na próxima tela.</p>`;
+  }).join('') + `<p class="hint">Histórico local (apagado a cada reinício do servidor).</p>`;
+}
+function fmtWhen(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso).slice(0, 16).replace('T', ' ');
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function viewSubstackVersion(key, n) {
+  const box = $('h-preview');
+  const open = box.dataset.vkey === key;
+  if (open) { box.style.display = 'none'; box.dataset.vkey = ''; box.innerHTML = ''; return; }
+  box.dataset.vkey = key;
+  box.dataset.vn = String(n);
+  box.style.display = '';
+  box.innerHTML = '<p class="hint">Carregando versão…</p>';
+  const url = `/api/posts/${encodeURIComponent(S.cur.id)}/versions/content?edition=${encodeURIComponent(S.cur.edition)}&key=${encodeURIComponent(key)}`;
+  apiFetch(url, { headers: H() }).then(r => r.json()).then(j => {
+    if (j.error) throw new Error(j.error);
+    const restore = S.cur.isPublished ? '' :
+      `<button id="h-restore" class="font-ui font-medium rounded-lg px-3 py-2 transition disabled:opacity-50 disabled:cursor-wait bg-orange-600 hover:bg-orange-700 text-white">Restaurar esta versão</button>`;
+    box.innerHTML = `<div class="h-pv-head"><span class="hint">v${n} · ${fmtWhen(j.at)}</span>${restore}</div><div class="h-pv-doc">${esc(j.markdown || '')}</div>`;
+    const rb = $('h-restore');
+    if (rb) rb.onclick = () => restoreSubstackVersion(key, n);
+  }).catch(e => { box.innerHTML = `<p class="err">Falha ao carregar a versão: ${esc(e.message)}</p>`; });
+}
+async function restoreSubstackVersion(key, n) {
+  const rb = $('h-restore');
+  if (rb) { rb.disabled = true; rb.textContent = 'Restaurando…'; }
+  try {
+    const r = await apiFetch(`/api/posts/${encodeURIComponent(S.cur.id)}/versions/restore`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...H() },
+      body: JSON.stringify({ key, edition: S.cur.edition }),
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    setStatus('versão restaurada — reabra para revisar', 'ok');
+    openHistory(S.cur.id, S.cur.edition);
+  } catch (e) {
+    showErr(`Falha ao restaurar: ${e.message}`, 'err-hist');
+    if (rb) { rb.disabled = false; rb.textContent = 'Restaurar esta versão'; }
+  }
 }
 function fmtEta(s) {
   s = Math.max(0, Math.round(s || 0));

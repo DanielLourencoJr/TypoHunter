@@ -4,7 +4,7 @@ import {
   snapOf, sameSnap, snapOfVersion, latestMarkdown, editionParam, editionMarkdown,
   blankEdStore, migrateStore, edStore, pubsFromProfile,
   sidFrom, reviewerSid, pubFrom, readJson, send,
-  enqueueAnalysis, queueAhead, jobEtaSec, jobs, pipelineProbe,
+  enqueueAnalysis, queueAhead, jobEtaSec, jobs, pipelineProbe, sanitizeVersions,
 } from "../server.js";
 import { geminiProvider } from "../lib/llm.js";
 
@@ -296,4 +296,31 @@ test("pipelineProbe: happy path serves via the real prompt and filters suggestio
     assert.equal(calls[0].body.messages[1].role, "user");
     assert.match(calls[0].body.messages[1].content, /errro/);
   } finally { restore(); }
+});
+
+test("sanitizeVersions: maps S3 snapshots and strips author emails", () => {
+  const raw = {
+    contentId: "post/1/cur/9/hash",
+    publishedContentKey: null,
+    versions: {
+      previousBucket: null,
+      contents: [
+        { Key: "post/1/cur/9/hash", LastModified: "2026-10-05T19:11:34.000Z", Size: 2737, url: "s3://x", user: { id: 9, name: "Daniel", email: "a@b.c" } },
+        { Key: "post/1/old/9/hash", LastModified: "2025-10-24T18:40:49.000Z", Size: 47, url: "s3://y", user: null },
+      ],
+    },
+  };
+  const v = sanitizeVersions(raw);
+  assert.equal(v.current, "post/1/cur/9/hash");
+  assert.equal(v.items.length, 2);
+  assert.deepEqual(v.items[0].user, { id: 9, name: "Daniel" });
+  assert.equal(v.items[1].user, null);
+  assert.ok(!("email" in (v.items[0].user || {})), "email must never be forwarded");
+  assert.ok(!JSON.stringify(v).includes("a@b.c"));
+  assert.equal(v.items[0].at, "2026-10-05T19:11:34.000Z");
+});
+
+test("sanitizeVersions: tolerates a missing/garbage payload", () => {
+  assert.deepEqual(sanitizeVersions(null), { current: null, previousBucket: null, published: null, items: [] });
+  assert.deepEqual(sanitizeVersions({}).items, []);
 });

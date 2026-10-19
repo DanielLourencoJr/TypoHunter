@@ -12,6 +12,11 @@ Source: local `SubstackCLI` repository, revision
 Copied modules: `auth.js`, `convert.js`, `drafts.js`, `files.js`,
 `frontmatter.js`, `images.js`, and `md.js` into `lib/substack-cli/`.
 
+Local additions layered on the vendored `drafts.js` (editor version history,
+see `GET /api/v1/drafts/{id}/versions?bucket`): `listVersions` and the
+version-content/restore helpers. Keep them additive so upstream can be
+re-applied cleanly.
+
 ## SubstackKit
 
 Source: `DanielLourencoJr/SubstackKit`, revision
