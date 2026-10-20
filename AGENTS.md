@@ -90,9 +90,19 @@ per-fix accept/reject diff UI → push back via internal API. No deps, no build.
   provider, not just failover. `POST /api/health/versions` (same gate) runs
   `versionsProbe`: it lists a draft's editor snapshots and loads the newest one
   read-only to prove the `version_key` contract (never restores).
-  `npm run verify:hosted [-- --deep] [--pipeline [--only <name>]]
+  `GET /api/health/ready` (public, read-only) probes `profile/self` plus one
+  draft listing and returns 200/503, without creating a draft or exposing the
+  SID; monitors should target it. The verdict is cached
+  (`SID_CHECK_TTL_MS`, default 60s), refreshed in the background
+  (`SID_CHECK_INTERVAL_MS`, default 10 min), and flipped immediately by any
+  401/403 from a real Substack call. `SID_ALERT_WEBHOOK` (Slack/Discord-style
+  JSON `{text,content}`) fires once on `ok→stale` and once on recovery. The UI
+  checks readiness on entry, shows a generic unavailable warning, and disables
+  review/sign-in actions while stale.
+  `npm run verify:hosted [-- --auth] [--deep] [--pipeline [--only <name>]]
   [--versions]` checks these from anywhere (Substack calls happen server-side;
-  the client flags need only `REVIEWER_SID` locally).
+  `--deep`/`--pipeline`/`--versions` need only `REVIEWER_SID` locally, `--auth`
+  needs nothing).
   Publishing to the live page is done in the Substack editor — server-side
   republish is intentionally off (Substack gates it behind a fresh sign-in).
   Verification drafts expire after 15 minutes and are removed on successful

@@ -32,6 +32,17 @@ let authCleanupTimer;
 let authCleanupRunning = false;
 const challengeRate = new Map();
 
+// Read-only reviewer-SID health. `ok: null` means "not checked yet". The probe
+// uses the same identity as a proofread but never writes: profile/self proves
+// the cookie, and listing one draft proves access to the configured smoke
+// publication. Cached so health monitors can poll often without hammering
+// Substack, and background checks keep it fresh between polls.
+const SID_CHECK_TTL_MS = Math.max(10000, Number(process.env.SID_CHECK_TTL_MS) || 60 * 1000);
+const SID_CHECK_INTERVAL_MS = Math.max(SID_CHECK_TTL_MS, Number(process.env.SID_CHECK_INTERVAL_MS) || 10 * 60 * 1000);
+let sidHealth = { ok: null, checkedAt: 0, reason: "" };
+let sidProbePromise = null;
+let sidCheckTimer = null;
+
 // Best-effort per-provider daily usage counters (gitignored). Lets the
 // operator see which key is burning and how fast: { date, providers: {...} }.
 function recordUsage(providerName, tokens) {
@@ -661,6 +672,97 @@ export async function versionsProbe({ pub, sid } = {}) {
   return { ok: false, reason: "no draft exposes editor history to the reviewer", pub: host, scanned: ids.length };
 }
 
+function isSubstackAuthRejection(error) {
+  return /HTTP (401|403)\b/.test(String(error?.message || error));
+}
+
+function sidHealthSnapshot() {
+  return { ...sidHealth };
+}
+
+function notifySidChange(ok, reason) {
+  const hook = String(process.env.SID_ALERT_WEBHOOK || "").trim();
+  if (!hook) return;
+  const text = ok
+    ? "TypoHunter: reviewer session restored; draft access works again."
+    : reason === "reviewer session expired"
+      ? "TypoHunter: reviewer session expired; update REVIEWER_SID on the server."
+      : `TypoHunter: reviewer draft access unavailable (${reason || "unknown"}).`;
+  const payload = JSON.stringify({ text, content: text, reason: reason || "", commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || "dev" });
+  fetch(hook, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: payload,
+    signal: AbortSignal.timeout(5000),
+  }).catch(() => { /* alerts must never break the request */ });
+}
+
+function setSidHealth(ok, reason = "") {
+  const previous = sidHealth.ok;
+  sidHealth = { ok, checkedAt: Date.now(), reason: ok ? "" : reason };
+  if (ok ? previous === false : previous !== false) notifySidChange(ok, reason);
+}
+
+// Cached read-only probe. `force` is used by the background timer so its own
+// cadence is not swallowed by the endpoint TTL.
+export async function probeReviewerSid({ force = false } = {}) {
+  const sid = reviewerSid();
+  if (!sid) {
+    setSidHealth(false, "reviewer SID not configured");
+    return sidHealthSnapshot();
+  }
+  if (!force && sidHealth.checkedAt && Date.now() - sidHealth.checkedAt < SID_CHECK_TTL_MS) {
+    return sidHealthSnapshot();
+  }
+  if (sidProbePromise) return sidProbePromise;
+  sidProbePromise = (async () => {
+    try {
+      await fetchProfileSelf(sid);
+      const pub = publicationHost(process.env.SMOKE_PUB);
+      if (pub) await listDrafts({ sid, publicationUrl: pub, limit: 1 });
+      setSidHealth(true);
+    } catch (error) {
+      setSidHealth(false, isSubstackAuthRejection(error) ? "reviewer session expired" : "substack unreachable");
+    } finally {
+      sidProbePromise = null;
+    }
+    return sidHealthSnapshot();
+  })();
+  return sidProbePromise;
+}
+
+function scheduleSidCheck(delay = SID_CHECK_INTERVAL_MS) {
+  if (sidCheckTimer) clearTimeout(sidCheckTimer);
+  sidCheckTimer = setTimeout(async () => {
+    try { await probeReviewerSid({ force: true }); } catch { /* retried next tick */ }
+    scheduleSidCheck();
+  }, Math.max(1000, delay));
+  sidCheckTimer.unref?.();
+}
+
+function startSidCheck() {
+  probeReviewerSid({ force: true }).catch(() => {});
+  scheduleSidCheck();
+}
+
+function stopSidCheck() {
+  if (sidCheckTimer) clearTimeout(sidCheckTimer);
+  sidCheckTimer = null;
+}
+
+// A 401/403 from an ordinary request is as authoritative as the probe and
+// makes the UI react immediately instead of waiting for the next tick.
+function noteSubstackAuthRejection(error) {
+  if (!isSubstackAuthRejection(error)) return false;
+  setSidHealth(false, "reviewer session expired");
+  return true;
+}
+
+// Test seam: resets the cached verdict so mocked fetch outcomes are honoured.
+export function resetSidHealth() {
+  sidHealth = { ok: null, checkedAt: 0, reason: "" };
+}
+
 const server = http.createServer(async (req, res) => {  try {
     const url = new URL(req.url, "http://localhost");
     if (req.method === "GET" && url.pathname === "/api/auth/session") {
@@ -860,7 +962,7 @@ const server = http.createServer(async (req, res) => {  try {
 
     const session = requestSession(req);
     if (session) req.authSession = session;
-    else if (!(req.method === "GET" && (url.pathname === "/api/config" || url.pathname === "/api/resolve" || url.pathname === "/api/health"))) {
+    else if (!(req.method === "GET" && (url.pathname === "/api/config" || url.pathname === "/api/resolve" || url.pathname === "/api/health" || url.pathname === "/api/health/ready"))) {
       return send(res, 401, { error: "authentication required" });
     }
 
@@ -892,6 +994,20 @@ const server = http.createServer(async (req, res) => {  try {
         providers,
         reviewerEmail: process.env.REVIEWER_EMAIL || "substack.proofreader@proton.me",
         deep: Boolean(publicationHost(process.env.SMOKE_PUB)),
+      });
+    }
+
+    // Public readiness: proves the reviewer can still read the smoke
+    // publication. Read-only and secret-free, so a free uptime monitor can
+    // poll it every minute without draft churn. 503 means "do not let users
+    // start a review"; the reason stays generic.
+    if (req.method === "GET" && url.pathname === "/api/health/ready") {
+      const status = await probeReviewerSid();
+      return send(res, status.ok ? 200 : 503, {
+        ok: status.ok === true,
+        checkedAt: status.checkedAt,
+        reason: status.ok ? "" : "draft access unavailable",
+        commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || "dev",
       });
     }
 
@@ -1496,6 +1612,7 @@ const server = http.createServer(async (req, res) => {  try {
 
     return send(res, 404, { error: "not found" });
   } catch (e) {
+    if (noteSubstackAuthRejection(e)) res.setHeader("X-TypoHunter-Sid", "stale");
     return send(res, 500, { error: String(e.message || e).slice(0, 800) });
   }
 });
@@ -1503,6 +1620,7 @@ server.on("listening", startAuthCleanup);
 server.on("close", () => {
   if (authCleanupTimer) clearTimeout(authCleanupTimer);
   authCleanupTimer = null;
+  stopSidCheck();
 });
 
 // Only bind a port when this file is the process entrypoint. Tests import the
@@ -1518,6 +1636,7 @@ function isDirectRun() {
 }
 if (isDirectRun()) {
   server.listen(PORT, () => console.log(`typohunter on http://localhost:${PORT} (PUB=${process.env.PUB || "?"})`));
+  startSidCheck();
   // The OpenCode provider spawns a headless `opencode serve`; don't leave it
   // orphaned when nodemon restarts or the operator stops the server.
   const stop = () => { stopOpencodeServer(); process.exit(0); };
@@ -1534,5 +1653,6 @@ export {
   snapOf, sameSnap, snapOfVersion, editionParam, editionMarkdown,
   blankEdStore, migrateStore, edStore,
   sanitizeVersions,
+  sidHealthSnapshot,
   enqueueAnalysis, queueAhead, jobEtaSec, pumpQueue, jobs, server,
 };

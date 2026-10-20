@@ -7,6 +7,7 @@
 // Usage:
 //   node scripts/verify-hosted.mjs --url https://typohunter.onrender.com
 //   node scripts/verify-hosted.mjs --url ... --expect-commit 25f9220
+//   node scripts/verify-hosted.mjs --url ... --auth      # read-only readiness
 //   node scripts/verify-hosted.mjs --url ... --deep      # needs REVIEWER_SID
 //   node scripts/verify-hosted.mjs --url ... --pipeline  # needs REVIEWER_SID
 //   node scripts/verify-hosted.mjs --url ... --pipeline --only opencode
@@ -31,6 +32,7 @@ const flag = (name) => args.includes(name);
 
 const url = String(opt("--url", process.env.HOSTED_URL || "https://typohunter.onrender.com")).replace(/\/+$/, "");
 const expectCommit = String(opt("--expect-commit", ""));
+const auth = flag("--auth");
 const deep = flag("--deep");
 const pipeline = flag("--pipeline");
 const versions = flag("--versions");
@@ -68,6 +70,13 @@ async function main() {
   const me = await fetch(`${url}/api/me`);
   if (me.status === 401) pass("/api/me requires auth");
   else fail(`/api/me should be 401 anonymously, got ${me.status}`);
+
+  if (auth) {
+    const r = await fetch(`${url}/api/health/ready`, { headers: { Accept: "application/json" } });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 200 && body.ok) pass(`reviewer draft access ready (checked ${new Date(body.checkedAt).toISOString()})`);
+    else fail(`reviewer draft access not ready (HTTP ${r.status}${body.reason ? `: ${body.reason}` : ""})`);
+  }
 
   if (deep) {
     const key = process.env.REVIEWER_SID || "";

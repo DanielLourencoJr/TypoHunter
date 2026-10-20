@@ -210,6 +210,10 @@ select,input[type=text]{font-family:var(--font-ui);font-size:14px;padding:8px 10
 pre.raw{white-space:pre-wrap;background:var(--soft);padding:12px;border-radius:8px;font-size:13px;max-height:400px;overflow:auto}
 .hint{font-family:var(--font-ui);font-size:13px;color:var(--muted)}
 .err{display:none;background:var(--red-bg);color:var(--red);border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-family:var(--font-ui);font-size:14px;margin-top:10px}
+.sid-alert{display:none;position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:30;align-items:center;gap:14px;max-width:min(560px,calc(100vw - 32px));background:var(--red-bg);color:var(--red);border:1px solid #fecaca;border-radius:12px;padding:12px 16px;box-shadow:0 12px 30px rgba(0,0,0,.18);font-family:var(--font-ui);font-size:14px;line-height:1.45}
+.sid-alert.on{display:flex}
+.sid-alert button{flex:none;font-family:var(--font-ui);font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer}
+.sid-alert button:disabled{opacity:.55;cursor:wait}
 details{font-family:var(--font-ui);font-size:13px;color:var(--muted);margin-top:8px}
 .stickybar{position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:5;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .done-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
@@ -536,6 +540,11 @@ a { color: var(--accent); }
 
 </main>
 
+<div id="sid-alert" class="sid-alert" role="alert">
+  <span id="sid-alert-text">A revisão está temporariamente indisponível. Tente novamente em instantes.</span>
+  <button id="sid-alert-retry" type="button">Tentar de novo</button>
+</div>
+
 <div id="welcome">
   <div class="auth-flow" id="welcome-auth" data-slide="0">
     <div class="auth-track">
@@ -631,6 +640,7 @@ async function apiFetch(input, init) {
   const response = await networkFetch(input, init);
   let pathname = '';
   try { pathname = new URL(typeof input === 'string' ? input : input.url, location.href || 'http://localhost').pathname; } catch {}
+  try { if (response.headers?.get?.('x-typohunter-sid') === 'stale') setSidBlocked(true); } catch {}
   if (response.status === 401 && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/') && S.auth) expireLogin();
   return response;
 }
@@ -648,9 +658,44 @@ function toggleTheme() {
   try { localStorage.setItem('th_theme', next); } catch {}
   paintThemeBtn();
 }
-const S = { ref: null, profileRef: null, pendingPub: '', returningAuth: null, pub: '', auth: null, posts: null, cur: null, decisions: {}, groupDeselect: new Set(), editorUrl: null, isPublished: false, lastApplied: 0, admin: null, authPick: '', authPubOptions: [] };
+const S = { ref: null, profileRef: null, pendingPub: '', returningAuth: null, pub: '', auth: null, posts: null, cur: null, decisions: {}, groupDeselect: new Set(), editorUrl: null, isPublished: false, lastApplied: 0, admin: null, authPick: '', authPubOptions: [], sidBlocked: false };
 function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = 'pill' + (cls ? ' ' + cls : ''); }
 function showErr(m, where) { const el = $(where); if (el) { el.style.display = 'block'; el.textContent = m; } setStatus('erro', 'err'); }
+const SID_LOCK_IDS = ['welcome-start', 'auth-next', 'auth-pub-go', 'auth-verify', 'refgo', 'tut-check', 'dash-go', 'rv-finish', 'done-push'];
+const sidLocks = new Set();
+function setSidBlocked(blocked) {
+  S.sidBlocked = !!blocked;
+  const box = $('sid-alert');
+  if (box) box.classList.toggle('on', S.sidBlocked);
+  for (const id of SID_LOCK_IDS) {
+    const btn = $(id);
+    if (!btn) continue;
+    if (S.sidBlocked) {
+      if (!btn.disabled) { btn.disabled = true; sidLocks.add(id); }
+    } else if (sidLocks.has(id)) {
+      btn.disabled = false;
+      sidLocks.delete(id);
+    }
+  }
+}
+async function checkSidStatus() {
+  const retry = $('sid-alert-retry');
+  if (retry) retry.disabled = true;
+  try {
+    const r = await networkFetch('/api/health/ready', { cache: 'no-store' });
+    const j = await r.json().catch(() => ({}));
+    if (j && j.ok === true) setSidBlocked(false);
+    else if (j && j.ok === false) setSidBlocked(true);
+  } catch { /* transient network failure: keep the last verdict */ }
+  finally { if (retry) retry.disabled = false; }
+}
+function watchSidStatus() {
+  const tick = async () => {
+    await checkSidStatus();
+    setTimeout(tick, 60 * 1000).unref?.();
+  };
+  setTimeout(tick, 60 * 1000).unref?.();
+}
 function clearErrs() { document.querySelectorAll('.err').forEach(e => { e.style.display = 'none'; e.textContent = ''; }); }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function H() { const h = {}; if (S.pub) { h['x-pub'] = S.pub; try { localStorage.setItem('th_pub', S.pub); } catch {} } return h; }
@@ -1863,9 +1908,13 @@ $('adm-list').onclick = async () => {
 
 /* ---------- boot ---------- */
 $('theme').onclick = toggleTheme;
+$('sid-alert-retry').onclick = () => checkSidStatus();
+if (typeof window.addEventListener === 'function') window.addEventListener('focus', () => checkSidStatus());
 paintThemeBtn();
 async function boot() {
   showLoginGate();
+  checkSidStatus();
+  watchSidStatus();
   await loadAuthConfig();
   try {
     const r = await apiFetch('/api/auth/session');

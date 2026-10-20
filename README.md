@@ -92,6 +92,8 @@ configured.
 
 ```bash
 npm run verify:hosted -- --url https://typohunter.onrender.com
+# --auth is a read-only readiness check (no SID needed, no draft created):
+npm run verify:hosted -- --url https://typohunter.onrender.com --auth
 # --deep proves the reviewer identity can still edit the test publication
 # (needs REVIEWER_SID in .env): it creates and immediately deletes one
 # throwaway draft there, leaving nothing behind.
@@ -105,6 +107,21 @@ npm run verify:hosted -- --url https://typohunter.onrender.com --pipeline --only
 `npm run test:hosted:ui` runs the browser navigation spec against the deployed
 URL (override with `BASE_URL=…`); its API calls are mocked, so it needs no
 credentials.
+
+## Monitor a stale reviewer session
+
+`GET /api/health/ready` (public, read-only) returns 200 when the reviewer can
+still read the smoke publication and 503 otherwise. It never creates a draft and
+never exposes the SID or publication contents. Point a free monitor at it — for
+example cron-job.org every 1–5 minutes or UptimeRobot every 5 minutes — and
+enable its failure/recovery email. No secret needs to leave the server.
+
+For a push notification on the exact transition, set `SID_ALERT_WEBHOOK` on the
+host to a Slack, Discord, or similar webhook URL; it fires once when access
+breaks and once when it recovers. The app also shows a generic "temporarily
+unavailable" warning on entry and disables review actions while not ready.
+`SID_CHECK_INTERVAL_MS` (default 10 min) controls the background check and
+`SID_CHECK_TTL_MS` (default 60 s) how often public checks may re-probe.
 
 ## Tests and CI
 

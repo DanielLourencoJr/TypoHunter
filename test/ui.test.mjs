@@ -234,3 +234,21 @@ T("admCard: synthetic adm: id and mapped stats", () => {
   assert.equal(c.likes, 3);
   assert.equal(c.words, 10);
 });
+
+T("sid health: stale readiness blocks entry, recovery unlocks it", async () => {
+  fetchImpl = async (input) => {
+    assert.match(String(input), /\/api\/health\/ready/);
+    return new Response(JSON.stringify({ ok: false }), { status: 503, headers: { "Content-Type": "application/json" } });
+  };
+  await sandbox.checkSidStatus();
+  const alert = els.get("sid-alert");
+  assert.equal(alert.classList.contains("on"), true, "generic alert is visible");
+  assert.equal(els.get("welcome-start").disabled, true, "entry CTA is blocked");
+  assert.equal(els.get("auth-verify").disabled, true, "sign-in is blocked");
+
+  fetchImpl = async () => new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+  await sandbox.checkSidStatus();
+  assert.equal(alert.classList.contains("on"), false, "alert clears on recovery");
+  assert.equal(els.get("welcome-start").disabled, false, "entry CTA is restored");
+  assert.equal(els.get("auth-verify").disabled, false, "sign-in is restored");
+});
