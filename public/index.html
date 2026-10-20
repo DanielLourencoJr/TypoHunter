@@ -690,11 +690,9 @@ async function checkSidStatus() {
   finally { if (retry) retry.disabled = false; }
 }
 function watchSidStatus() {
-  const tick = async () => {
-    await checkSidStatus();
-    setTimeout(tick, 60 * 1000).unref?.();
-  };
-  setTimeout(tick, 60 * 1000).unref?.();
+  if (typeof setInterval !== 'function') return;
+  const timer = setInterval(checkSidStatus, 60 * 1000);
+  timer?.unref?.();
 }
 function clearErrs() { document.querySelectorAll('.err').forEach(e => { e.style.display = 'none'; e.textContent = ''; }); }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
